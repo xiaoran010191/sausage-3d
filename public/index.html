@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>香肠派对 3D 联机版</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="screen" id="authScreen">
+  <div class="auth-logo">🌭</div>
+  <div class="auth-title">香肠<span>派对</span> 3D</div>
+  <div class="auth-sub" id="authSub">用 QQ 邮箱注册 / 登录</div>
+
+  <div class="auth-form" id="loginForm">
+    <input class="auth-input" id="loginEmail" placeholder="QQ 邮箱（xxx@qq.com）" autocomplete="off">
+    <input class="auth-input" id="loginPass" type="password" placeholder="密码">
+    <button class="auth-btn" id="loginBtn">登 录</button>
+    <div class="auth-switch">没有账号？<a id="toRegister">立即注册</a></div>
+  </div>
+
+  <div class="auth-form" id="registerForm" style="display:none">
+    <input class="auth-input" id="regEmail" placeholder="QQ 邮箱（xxx@qq.com）" autocomplete="off">
+    <div class="code-row">
+      <input class="auth-input" id="regCode" placeholder="验证码" maxlength="6" style="flex:1">
+      <button class="code-btn" id="sendCodeBtn">获取验证码</button>
+    </div>
+    <input class="auth-input" id="regNick" placeholder="昵称（2-12 字）" maxlength="12" autocomplete="off">
+    <input class="auth-input" id="regPass" type="password" placeholder="密码（至少 6 位）">
+    <input class="auth-input" id="regPass2" type="password" placeholder="确认密码">
+    <button class="auth-btn" id="regBtn">注 册 并 登 录</button>
+    <div class="auth-switch">已有账号？<a id="toLogin">返回登录</a></div>
+  </div>
+</div>
+
+<div id="lobbyScreen" class="hidden">
+  <div class="lobby-header">
+    <div class="lobby-logo">🌭 香肠<span>派对</span> 3D</div>
+    <div class="lobby-profile-brief">
+      <span class="lv" id="lobbyLevel">Lv.1</span>
+      <span class="nick" id="lobbyNick">玩家</span>
+      <button class="mini-btn" id="logoutBtn">退出</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="lobbyTabs">
+    <button class="tab active" data-tab="game">🎮 游戏</button>
+    <button class="tab" data-tab="rank">🏆 排行榜</button>
+    <button class="tab" data-tab="friends">👥 好友</button>
+  </div>
+
+  <div class="lobby-body">
+    <div class="lobby-preview">
+      <canvas id="lobbyCanvas"></canvas>
+      <div class="preview-name" id="previewName">玩家</div>
+      <div class="preview-level" id="previewLevel">Lv.1</div>
+    </div>
+
+    <div class="lobby-panel" id="panel-game">
+      <div class="panel-section">
+        <h3>🎯 游戏模式</h3>
+        <div class="mode-grid">
+          <button class="mode-card active" data-mode="single">
+            <div class="m-name">单人训练</div>
+            <div class="m-tag">打电脑 · 熟悉地图</div>
+          </button>
+          <button class="mode-card" data-mode="online">
+            <div class="m-name">在线对战</div>
+            <div class="m-tag">匹配真人玩家</div>
+          </button>
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>🗺️ 地图</h3>
+        <div class="map-grid" id="mapGrid"></div>
+      </div>
+      <div class="panel-section">
+        <h3>🔫 初始武器</h3>
+        <div class="weapon-grid" id="weaponGrid"></div>
+      </div>
+      <div class="panel-section">
+        <h3>🎨 皮肤</h3>
+        <div class="color-grid" id="colorGrid"></div>
+      </div>
+      <div class="panel-section">
+        <h3>⚙️ 设置</h3>
+        <div class="setting-row"><label>音量</label>
+          <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.6">
+          <span class="val" id="volumeValue">0.6</span></div>
+        <div class="setting-row"><label>灵敏度</label>
+          <input type="range" id="sensSlider" min="0.4" max="2.5" step="0.1" value="1">
+          <span class="val" id="sensValue">1.0</span></div>
+        <div class="setting-row"><label>辅助瞄准</label>
+          <input type="range" id="aimAssistSlider" min="0" max="0.5" step="0.05" value="0.1">
+          <span class="val" id="aimAssistValue">0.10</span></div>
+      </div>
+    </div>
+
+    <div class="lobby-panel hidden" id="panel-rank">
+      <div class="panel-section">
+        <h3>🏆 全球排行榜 · 按击杀排序</h3>
+        <div id="rankList" class="rank-list">加载中...</div>
+      </div>
+    </div>
+
+    <div class="lobby-panel hidden" id="panel-friends">
+      <div class="panel-section">
+        <h3>👥 我的好友</h3>
+        <div id="friendList" class="friend-list">加载中...</div>
+      </div>
+      <div class="panel-section">
+        <h3>➕ 添加好友</h3>
+        <div class="code-row">
+          <input class="auth-input" id="friendEmail" placeholder="好友 QQ 邮箱" style="flex:1">
+          <button class="code-btn" id="addFriendBtn">添加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lobby-footer">
+    <button class="btn-play" id="playBtn">开 始 游 戏</button>
+  </div>
+</div>
+
+<div id="loadOverlay" class="hidden">
+  <div class="load-spinner">🌭</div>
+  <div class="load-title">准备进入战场</div>
+  <div class="load-msg" id="loadMsg">正在初始化...</div>
+  <div class="load-bar"><div class="load-fill" id="loadFill"></div></div>
+  <div class="load-pct" id="loadPct">0%</div>
+</div>
+
+<div id="hud">
+  <div id="crosshair"><div class="h"></div><div class="v"></div></div>
+  <div class="hud-top">
+    <div class="alive-box">🌭 存活 <b id="aliveNum">13</b></div>
+    <div class="zone-msg" id="zoneMsg">安全区稳定</div>
+    <div class="net-box" id="netBox">📶 --</div>
+  </div>
+  <div class="meds-bar" id="medsBar"></div>
+  <div class="hud-bottom">
+    <div class="hp-wrap">
+      <div class="hp-bar"><div class="hp-fill" id="hpFill"></div></div>
+      <div class="hp-text" id="hpText">100 / 100</div>
+    </div>
+    <div class="weapon-box">
+      <div class="w-name" id="weaponName">手枪</div>
+      <div class="w-tip" id="doorTip">按住左键开火</div>
+    </div>
+  </div>
+  <div class="kill-pop" id="killPop"></div>
+</div>
+<div id="hurtFlash"></div>
+
+<div class="screen hidden" id="endScreen">
+  <div class="logo-sausage" id="endIcon">🌭</div>
+  <div class="result-title win" id="endTitle">大吉大利</div>
+  <div class="sub" id="endSub">今晚吃肠！</div>
+  <div class="stats">
+    <div class="stat"><b id="statKills">0</b><span>淘汰</span></div>
+    <div class="stat"><b id="statTime">0s</b><span>存活</span></div>
+    <div class="stat"><b id="statRank">#1</b><span>排名</span></div>
+  </div>
+  <div class="end-btns">
+    <button class="btn" id="againBtn">🔄 再来一局</button>
+    <button class="btn ghost" id="backToLobbyBtn">🏠 返回大厅</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

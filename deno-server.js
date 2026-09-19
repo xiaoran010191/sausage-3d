@@ -1,5 +1,5 @@
 /* =========================================================
-   香肠派对 3D · Deno Deploy 后端（房间联机版 + 玩家查询接口）
+   香肠派对 3D · Deno Deploy 后端
    ========================================================= */
 
 const kv = await Deno.openKv();
@@ -26,9 +26,7 @@ function makeSalt() {
 function makeRoomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
 
@@ -77,12 +75,10 @@ function publicUser(u) {
   };
 }
 
-/* ---------- 房间管理（内存） ---------- */
+/* ---------- 房间管理 ---------- */
 const rooms = new Map();
 
-function getRoom(code) {
-  return rooms.get(code);
-}
+function getRoom(code) { return rooms.get(code); }
 
 function createRoom(hostEmail, hostName) {
   let code;
@@ -188,9 +184,7 @@ async function apiResult(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
-/* =========================================================
-   ★ 新增：按邮箱查询玩家（给 QQ 机器人用）
-   ========================================================= */
+/* ---------- 按邮箱查询玩家 ---------- */
 async function apiPlayer(url) {
   const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
   if (!email) return jsonResp({ ok: false, msg: "缺少 email 参数" });
@@ -232,6 +226,37 @@ async function apiLeaderboard() {
   }
   list.sort((a, b) => b.kills - a.kills || b.wins - a.wins);
   return jsonResp({ ok: true, list: list.slice(0, 100) });
+}
+
+/* ---------- 排行榜纯文本（给机器人用） ---------- */
+async function apiLeaderboardText() {
+  const list = [];
+  for await (const entry of kv.list({ prefix: ["user"] })) {
+    const u = entry.value;
+    list.push({
+      nickname: u.nickname,
+      kills: u.stats.kills || 0,
+      wins: u.stats.wins || 0
+    });
+  }
+  list.sort((a, b) => b.kills - a.kills || b.wins - a.wins);
+  const top = list.slice(0, 10);
+  let out = "🏆 击杀排行榜（前 10）\n";
+  out += "━━━━━━━━━━━━━━━\n";
+  if (top.length === 0) {
+    out += "📭 暂无数据\n";
+  } else {
+    top.forEach((u, i) => {
+      out += `第${i + 1}名 · ${u.nickname} · ${u.kills}杀 ${u.wins}鸡\n`;
+    });
+  }
+  out += "━━━━━━━━━━━━━━━";
+  return new Response(out, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Access-Control-Allow-Origin": "*"
+    }
+  });
 }
 
 /* ---------- 好友 ---------- */
@@ -280,9 +305,7 @@ async function apiFriendRemove(req) {
   return jsonResp({ ok: true });
 }
 
-/* =========================================================
-   WebSocket 联机（房间制）
-   ========================================================= */
+/* ---------- WebSocket 联机 ---------- */
 function handleWebSocket(req) {
   const { socket, response } = Deno.upgradeWebSocket(req);
   let player = null;
@@ -341,11 +364,7 @@ function handleWebSocket(req) {
         id: p.id, nickname: p.nickname, skin: p.skin, x: p.x, z: p.z
       }));
       room.players.add(player);
-      socket.send(JSON.stringify({
-        type: "room-joined",
-        code: roomCode,
-        players: otherPlayers
-      }));
+      socket.send(JSON.stringify({ type: "room-joined", code: roomCode, players: otherPlayers }));
       broadcastToRoom(roomCode, {
         type: "player-join",
         id: player.id, nickname: player.nickname, skin: player.skin
@@ -468,6 +487,7 @@ Deno.serve(async (req) => {
   if (path === "/api/result" && req.method === "POST") return await apiResult(req);
   if (path === "/api/player" && req.method === "GET") return await apiPlayer(url);
   if (path === "/api/leaderboard" && req.method === "GET") return await apiLeaderboard();
+  if (path === "/api/leaderboard-text" && req.method === "GET") return await apiLeaderboardText();
   if (path === "/api/friends" && req.method === "GET") return await apiFriends(req);
   if (path === "/api/friend/add" && req.method === "POST") return await apiFriendAdd(req);
   if (path === "/api/friend/remove" && req.method === "POST") return await apiFriendRemove(req);

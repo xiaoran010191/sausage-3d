@@ -1,13 +1,11 @@
 /* =========================================================
    香肠派对 3D · Deno Deploy 后端
-   支持：账号注册登录、好友、排行榜、WebSocket 联机
    ========================================================= */
 
 const kv = await Deno.openKv();
 const channel = new BroadcastChannel("sausage-game");
 const localSockets = new Set();
 
-// 跨 isolate 广播
 channel.onmessage = (e) => {
   const data = e.data;
   for (const ws of localSockets) {
@@ -17,7 +15,6 @@ channel.onmessage = (e) => {
   }
 };
 
-/* ---------- 工具 ---------- */
 const enc = new TextEncoder();
 
 async function hashPass(pw, salt) {
@@ -84,32 +81,28 @@ function publicUser(u) {
   };
 }
 
-/* ---------- API: 发送验证码 ---------- */
+/* ---------- 发送验证码 ---------- */
 async function apiSendCode(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
   if (!isValidQQ(email)) {
     return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱（xxx@qq.com）" });
   }
-  const old = await kv.get(["code", email]);
-  if (old.value && Date.now() - old.value.sentAt < 60000) {
-    const wait = Math.ceil((60000 - (Date.now() - old.value.sentAt)) / 1000);
-    return jsonResp({ ok: false, msg: `请 ${wait} 秒后再试` });
-  }
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await kv.set(["code", email], {
     code,
     sentAt: Date.now(),
-    expires: Date.now() + 5 * 60 * 1000
+    expires: Date.now() + 10 * 60 * 1000
   });
   console.log("========================================");
   console.log("📧 验证码请求 - 邮箱:", email);
   console.log("🔑 验证码:", code);
+  console.log("🔑 万能码: 888888");
   console.log("========================================");
-  return jsonResp({ ok: true, msg: "验证码已生成，请在 Deno 控制台查看" });
+  return jsonResp({ ok: true, msg: "验证码已生成，也可直接用万能码 888888" });
 }
 
-/* ---------- API: 注册 ---------- */
+/* ---------- 注册 ---------- */
 async function apiRegister(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
@@ -124,10 +117,13 @@ async function apiRegister(req) {
   const exist = await getUser(email);
   if (exist) return jsonResp({ ok: false, msg: "该邮箱已注册" });
 
-  const codeRec = await kv.get(["code", email]);
-  if (!codeRec.value) return jsonResp({ ok: false, msg: "请先获取验证码" });
-  if (codeRec.value.code !== code) return jsonResp({ ok: false, msg: "验证码错误" });
-  if (Date.now() > codeRec.value.expires) return jsonResp({ ok: false, msg: "验证码已过期" });
+  // 万能码 888888 直接通过，否则校验真实验证码
+  if (code !== "888888") {
+    const codeRec = await kv.get(["code", email]);
+    if (!codeRec.value) return jsonResp({ ok: false, msg: "请先获取验证码" });
+    if (codeRec.value.code !== code) return jsonResp({ ok: false, msg: "验证码错误（也可填 888888）" });
+    if (Date.now() > codeRec.value.expires) return jsonResp({ ok: false, msg: "验证码已过期" });
+  }
 
   const salt = makeSalt();
   const user = {
@@ -156,7 +152,7 @@ async function apiRegister(req) {
   return jsonResp({ ok: true, token, user: publicUser(user) });
 }
 
-/* ---------- API: 登录 ---------- */
+/* ---------- 登录 ---------- */
 async function apiLogin(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
@@ -170,7 +166,7 @@ async function apiLogin(req) {
   return jsonResp({ ok: true, token, user: publicUser(user) });
 }
 
-/* ---------- API: 保存档案 ---------- */
+/* ---------- 保存档案 ---------- */
 async function apiProfile(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
@@ -180,7 +176,7 @@ async function apiProfile(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
-/* ---------- API: 上传战绩 ---------- */
+/* ---------- 上传战绩 ---------- */
 async function apiResult(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
@@ -195,7 +191,7 @@ async function apiResult(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
-/* ---------- API: 排行榜 ---------- */
+/* ---------- 排行榜 ---------- */
 async function apiLeaderboard() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
@@ -212,7 +208,7 @@ async function apiLeaderboard() {
   return jsonResp({ ok: true, list: list.slice(0, 100) });
 }
 
-/* ---------- API: 好友 ---------- */
+/* ---------- 好友 ---------- */
 async function apiFriends(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
@@ -240,7 +236,6 @@ async function apiFriendAdd(req) {
   if (!other) return jsonResp({ ok: false, msg: "对方账号不存在" });
   user.friends = user.friends || [];
   if (user.friends.includes(target)) return jsonResp({ ok: false, msg: "已经是好友" });
-  if (user.friends.length >= 50) return jsonResp({ ok: false, msg: "好友已达上限" });
   user.friends.push(target);
   other.friends = other.friends || [];
   if (!other.friends.includes(user.email)) other.friends.push(user.email);
@@ -368,7 +363,6 @@ function broadcast(data, except) {
       try { ws.send(data); } catch (_) {}
     }
   }
-  // 广播到其它 isolate
   channel.postMessage(data);
 }
 

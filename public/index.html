@@ -202,7 +202,7 @@ input{font-family:inherit;outline:none}
 
 <div class="screen" id="authScreen">
   <div class="auth-logo">🌭</div>
-  <div class="auth-title">香肠<span>派对</span> 3D</div>
+  <div class="auth-title">肠肠<span>大作战</span> 3D</div>
   <div class="auth-sub" id="authSub">用 QQ 邮箱注册 / 登录</div>
   <div class="auth-form" id="loginForm">
     <input class="auth-input" id="loginEmail" placeholder="QQ 邮箱（xxx@qq.com）" autocomplete="off">
@@ -226,7 +226,7 @@ input{font-family:inherit;outline:none}
 
 <div id="lobbyScreen" class="hidden">
   <div class="lobby-top">
-    <div class="logo-wrap"><span class="logo-icon">🌭</span><div class="logo-text">香肠<span>派对</span></div></div>
+    <div class="logo-wrap"><span class="logo-icon">🌭</span><div class="logo-text">肠肠<span>大作战</span></div></div>
     <div class="player-card">
       <div class="avatar">🌭</div>
       <div class="player-info">
@@ -536,7 +536,7 @@ function getLevel(kills){
   if(kills<100)return{lv:4,title:'沙场老手'};
   if(kills<200)return{lv:5,title:'百战精锐'};
   if(kills<400)return{lv:6,title:'战场传说'};
-  return{lv:7,title:'香肠之神'};
+  return{lv:7,title:'肠肠之神'};
 }
 
 function enterLobby(){
@@ -559,7 +559,6 @@ function renderLobby(){
   document.getElementById('lobbyLevel').textContent='Lv.'+lvl.lv;
   document.getElementById('previewLevel').textContent=lvl.title;
 
-  // 更新战绩卡片
   if(u.stats){
     var g=document.getElementById('myGames');
     var k=document.getElementById('myKills');
@@ -2062,6 +2061,7 @@ document.getElementById('exitGameBtn').onclick=function(){
 document.getElementById('doorBtn').onclick=function(){toggleDoor();};
 
 window.addEventListener('keydown',function(e){
+  if(!e.key)return;
   var k=e.key.toLowerCase();
   keys[k]=true;
   if([' ','arrowup','arrowdown','arrowleft','arrowright'].indexOf(k)>=0)e.preventDefault();
@@ -2075,7 +2075,7 @@ window.addEventListener('keydown',function(e){
     }
   }
 });
-window.addEventListener('keyup',function(e){keys[e.key.toLowerCase()]=false;});
+window.addEventListener('keyup',function(e){if(e.key)keys[e.key.toLowerCase()]=false;});
 document.addEventListener('pointerlockchange',function(){isLocked=document.pointerLockElement===renderer.domElement;});
 
 function bindInput(){

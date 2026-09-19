@@ -75,38 +75,25 @@ function publicUser(u) {
   };
 }
 
-/* ---------- 房间管理 ---------- */
 const rooms = new Map();
-
 function getRoom(code) { return rooms.get(code); }
-
 function createRoom(hostEmail, hostName) {
   let code;
   do { code = makeRoomCode(); } while (rooms.has(code));
-  rooms.set(code, {
-    players: new Set(),
-    host: hostEmail,
-    hostName: hostName,
-    createdAt: Date.now()
-  });
+  rooms.set(code, { players: new Set(), host: hostEmail, hostName: hostName, createdAt: Date.now() });
   return code;
 }
 
-/* ---------- 发送验证码 ---------- */
 async function apiSendCode(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
   if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱" });
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
-  console.log("========================================");
-  console.log("📧 验证码请求:", email, "验证码:", code);
-  console.log("🔑 万能码: 888888");
-  console.log("========================================");
+  console.log("📧 验证码:", email, code, "万能码 888888");
   return jsonResp({ ok: true, msg: "验证码已生成，也可直接用万能码 888888" });
 }
 
-/* ---------- 注册 ---------- */
 async function apiRegister(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
@@ -146,7 +133,6 @@ async function apiRegister(req) {
   return jsonResp({ ok: true, token, user: publicUser(user) });
 }
 
-/* ---------- 登录 ---------- */
 async function apiLogin(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
@@ -159,7 +145,6 @@ async function apiLogin(req) {
   return jsonResp({ ok: true, token, user: publicUser(user) });
 }
 
-/* ---------- 保存档案 ---------- */
 async function apiProfile(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
@@ -169,7 +154,6 @@ async function apiProfile(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
-/* ---------- 战绩 ---------- */
 async function apiResult(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
@@ -184,7 +168,7 @@ async function apiResult(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
-/* ---------- 按邮箱查询玩家 ---------- */
+/* ★★★ 修改点：字段全部平铺到顶层，方便 Secluded 读取 ★★★ */
 async function apiPlayer(url) {
   const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
   if (!email) return jsonResp({ ok: false, msg: "缺少 email 参数" });
@@ -196,21 +180,16 @@ async function apiPlayer(url) {
     ok: true,
     email: user.email,
     nickname: user.nickname,
-    stats: {
-      games: s.games || 0,
-      kills: s.kills || 0,
-      wins: s.wins || 0,
-      bestRank: s.bestRank || 999
-    },
-    profile: {
-      skinColor: user.profile?.skinColor || 0xff6b35,
-      startWeapon: user.profile?.startWeapon || "pistol",
-      startMap: user.profile?.startMap || "green"
-    }
+    games: s.games || 0,
+    kills: s.kills || 0,
+    wins: s.wins || 0,
+    bestRank: s.bestRank || 999,
+    skinColor: user.profile?.skinColor || 0xff6b35,
+    startWeapon: user.profile?.startWeapon || "pistol",
+    startMap: user.profile?.startMap || "green"
   });
 }
 
-/* ---------- 排行榜 ---------- */
 async function apiLeaderboard() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
@@ -228,7 +207,6 @@ async function apiLeaderboard() {
   return jsonResp({ ok: true, list: list.slice(0, 100) });
 }
 
-/* ---------- 排行榜纯文本（给机器人用） ---------- */
 async function apiLeaderboardText() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
@@ -259,7 +237,6 @@ async function apiLeaderboardText() {
   });
 }
 
-/* ---------- 好友 ---------- */
 async function apiFriends(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
@@ -305,7 +282,6 @@ async function apiFriendRemove(req) {
   return jsonResp({ ok: true });
 }
 
-/* ---------- WebSocket 联机 ---------- */
 function handleWebSocket(req) {
   const { socket, response } = Deno.upgradeWebSocket(req);
   let player = null;
@@ -345,11 +321,9 @@ function handleWebSocket(req) {
       const room = getRoom(roomCode);
       room.players.add(player);
       socket.send(JSON.stringify({
-        type: "room-created",
-        code: roomCode,
+        type: "room-created", code: roomCode,
         players: [...room.players].map(p => ({ id: p.id, nickname: p.nickname, skin: p.skin }))
       }));
-      console.log(`[房间] ${player.nickname} 创建了房间 ${roomCode}`);
       return;
     }
 
@@ -360,16 +334,10 @@ function handleWebSocket(req) {
       if (!room) { socket.send(JSON.stringify({ type: "error", msg: "房间不存在" })); return; }
       if (room.players.size >= 20) { socket.send(JSON.stringify({ type: "error", msg: "房间已满" })); return; }
       roomCode = code;
-      const otherPlayers = [...room.players].map(p => ({
-        id: p.id, nickname: p.nickname, skin: p.skin, x: p.x, z: p.z
-      }));
+      const otherPlayers = [...room.players].map(p => ({ id: p.id, nickname: p.nickname, skin: p.skin, x: p.x, z: p.z }));
       room.players.add(player);
       socket.send(JSON.stringify({ type: "room-joined", code: roomCode, players: otherPlayers }));
-      broadcastToRoom(roomCode, {
-        type: "player-join",
-        id: player.id, nickname: player.nickname, skin: player.skin
-      }, socket);
-      console.log(`[房间] ${player.nickname} 加入 ${roomCode}，当前 ${room.players.size} 人`);
+      broadcastToRoom(roomCode, { type: "player-join", id: player.id, nickname: player.nickname, skin: player.skin }, socket);
       return;
     }
 
@@ -395,15 +363,10 @@ function handleWebSocket(req) {
       player.alive = !!msg.alive;
     }
     else if (msg.type === "shoot" && roomCode) {
-      broadcastToRoom(roomCode, {
-        type: "shoot", id: player.id,
-        x: msg.x, z: msg.z, ang: msg.ang, weapon: msg.weapon
-      }, socket);
+      broadcastToRoom(roomCode, { type: "shoot", id: player.id, x: msg.x, z: msg.z, ang: msg.ang, weapon: msg.weapon }, socket);
     }
     else if (msg.type === "hit" && roomCode) {
-      broadcastToRoom(roomCode, {
-        type: "hit", shooter: player.id, target: msg.target, dmg: msg.dmg
-      }, socket);
+      broadcastToRoom(roomCode, { type: "hit", shooter: player.id, target: msg.target, dmg: msg.dmg }, socket);
     }
     else if (msg.type === "die" && roomCode) {
       player.alive = false;
@@ -422,12 +385,10 @@ function handleWebSocket(req) {
         broadcastToRoom(roomCode, { type: "player-leave", id: player.id }, socket);
         if (room.players.size === 0) rooms.delete(roomCode);
       }
-      console.log(`[房间] ${player.nickname} 离开 ${roomCode}`);
     }
   };
 
   socket.onerror = () => {};
-
   return response;
 }
 
@@ -443,7 +404,6 @@ function broadcastToRoom(code, msg, except) {
   }
 }
 
-/* ---------- 静态文件 ---------- */
 async function serveStatic(path) {
   if (path === "/" || path === "") path = "/index.html";
   try {
@@ -461,7 +421,6 @@ async function serveStatic(path) {
   }
 }
 
-/* ---------- 主入口 ---------- */
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname;
@@ -476,9 +435,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (req.headers.get("upgrade") === "websocket") {
-    return handleWebSocket(req);
-  }
+  if (req.headers.get("upgrade") === "websocket") return handleWebSocket(req);
 
   if (path === "/api/send-code" && req.method === "POST") return await apiSendCode(req);
   if (path === "/api/register" && req.method === "POST") return await apiRegister(req);

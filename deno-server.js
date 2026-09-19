@@ -1,9 +1,8 @@
 /* =========================================================
-   香肠派对 3D · Deno Deploy 后端（房间联机版）
+   香肠派对 3D · Deno Deploy 后端（房间联机版 + 玩家查询接口）
    ========================================================= */
 
 const kv = await Deno.openKv();
-
 const enc = new TextEncoder();
 
 async function hashPass(pw, salt) {
@@ -79,7 +78,7 @@ function publicUser(u) {
 }
 
 /* ---------- 房间管理（内存） ---------- */
-const rooms = new Map();  // roomCode -> { players:Set, host, createdAt }
+const rooms = new Map();
 
 function getRoom(code) {
   return rooms.get(code);
@@ -140,7 +139,7 @@ async function apiRegister(req) {
     friends: [],
     profile: {
       skinColor: 0xff6b35, startWeapon: "pistol", startMap: "green",
-      sensitivity: 1.0, aimAssist: 0.1, volume: 0.6, gyroEnabled: false
+      sensitivity: 1.2, aimAssist: 0.1, volume: 0.6, gyroEnabled: false
     }
   };
   await saveUser(user);
@@ -189,12 +188,41 @@ async function apiResult(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
+/* =========================================================
+   ★ 新增：按邮箱查询玩家（给 QQ 机器人用）
+   ========================================================= */
+async function apiPlayer(url) {
+  const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
+  if (!email) return jsonResp({ ok: false, msg: "缺少 email 参数" });
+  if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "邮箱格式不正确" });
+  const user = await getUser(email);
+  if (!user) return jsonResp({ ok: false, msg: "玩家不存在" });
+  const s = user.stats || {};
+  return jsonResp({
+    ok: true,
+    email: user.email,
+    nickname: user.nickname,
+    stats: {
+      games: s.games || 0,
+      kills: s.kills || 0,
+      wins: s.wins || 0,
+      bestRank: s.bestRank || 999
+    },
+    profile: {
+      skinColor: user.profile?.skinColor || 0xff6b35,
+      startWeapon: user.profile?.startWeapon || "pistol",
+      startMap: user.profile?.startMap || "green"
+    }
+  });
+}
+
 /* ---------- 排行榜 ---------- */
 async function apiLeaderboard() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
     const u = entry.value;
     list.push({
+      email: u.email,
       nickname: u.nickname,
       kills: u.stats.kills || 0,
       wins: u.stats.wins || 0,
@@ -264,7 +292,6 @@ function handleWebSocket(req) {
     let msg;
     try { msg = JSON.parse(ev.data); } catch (_) { return; }
 
-    /* ---- 认证 ---- */
     if (!player) {
       if (msg.type !== "auth") return socket.close();
       const r = await kv.get(["token", msg.token]);
@@ -289,7 +316,6 @@ function handleWebSocket(req) {
       return;
     }
 
-    /* ---- 创建房间 ---- */
     if (msg.type === "create-room") {
       if (roomCode) { socket.send(JSON.stringify({ type: "error", msg: "你已经在房间内" })); return; }
       roomCode = createRoom(player.email, player.nickname);
@@ -304,7 +330,6 @@ function handleWebSocket(req) {
       return;
     }
 
-    /* ---- 加入房间 ---- */
     if (msg.type === "join-room") {
       if (roomCode) { socket.send(JSON.stringify({ type: "error", msg: "你已经在房间内" })); return; }
       const code = String(msg.code || "").toUpperCase().trim();
@@ -329,7 +354,6 @@ function handleWebSocket(req) {
       return;
     }
 
-    /* ---- 离开房间 ---- */
     if (msg.type === "leave-room") {
       if (roomCode) {
         const room = getRoom(roomCode);
@@ -343,7 +367,6 @@ function handleWebSocket(req) {
       return;
     }
 
-    /* ---- 状态同步 ---- */
     if (msg.type === "state" && roomCode) {
       player.x = Number(msg.x) || 0;
       player.z = Number(msg.z) || 0;
@@ -443,6 +466,7 @@ Deno.serve(async (req) => {
   if (path === "/api/login" && req.method === "POST") return await apiLogin(req);
   if (path === "/api/profile" && req.method === "POST") return await apiProfile(req);
   if (path === "/api/result" && req.method === "POST") return await apiResult(req);
+  if (path === "/api/player" && req.method === "GET") return await apiPlayer(url);
   if (path === "/api/leaderboard" && req.method === "GET") return await apiLeaderboard();
   if (path === "/api/friends" && req.method === "GET") return await apiFriends(req);
   if (path === "/api/friend/add" && req.method === "POST") return await apiFriendAdd(req);

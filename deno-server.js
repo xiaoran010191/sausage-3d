@@ -1,9 +1,12 @@
 /* =========================================================
-   香肠派对 3D · Deno Deploy 后端
+   肠肠大作战 · Deno Deploy 后端（含管理员功能）
    ========================================================= */
 
 const kv = await Deno.openKv();
 const enc = new TextEncoder();
+
+// ★★★ 改这个密码 ★★★
+const ADMIN_KEY = "admin888";
 
 async function hashPass(pw, salt) {
   const data = enc.encode(pw + ":" + salt);
@@ -120,6 +123,7 @@ async function apiRegister(req) {
     createdAt: Date.now(),
     stats: { games: 0, kills: 0, wins: 0, bestRank: 999 },
     friends: [],
+    banned: false,
     profile: {
       skinColor: 0xff6b35, startWeapon: "pistol", startMap: "green",
       sensitivity: 1.2, aimAssist: 0.1, volume: 0.6, gyroEnabled: false
@@ -139,6 +143,7 @@ async function apiLogin(req) {
   const password = String(body.password || "");
   const user = await getUser(email);
   if (!user) return jsonResp({ ok: false, msg: "账号不存在" });
+  if (user.banned) return jsonResp({ ok: false, msg: "🚫 账号已被封禁\n原因：" + (user.banReason || "违反规则") });
   if (await hashPass(password, user.salt) !== user.passHash) return jsonResp({ ok: false, msg: "密码错误" });
   const token = makeToken();
   await kv.set(["token", token], { email, createdAt: Date.now() });
@@ -148,6 +153,7 @@ async function apiLogin(req) {
 async function apiProfile(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
+  if (user.banned) return jsonResp({ ok: false, msg: "账号已被封禁" }, 403);
   const body = await readJSON(req);
   Object.assign(user.profile, body.profile || {});
   await saveUser(user);
@@ -157,6 +163,7 @@ async function apiProfile(req) {
 async function apiResult(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
+  if (user.banned) return jsonResp({ ok: false, msg: "账号已被封禁" }, 403);
   const body = await readJSON(req);
   const { kills = 0, rank = 99, win = false } = body;
   const s = user.stats;
@@ -168,7 +175,6 @@ async function apiResult(req) {
   return jsonResp({ ok: true, user: publicUser(user) });
 }
 
-/* ★★★ 修改点：字段全部平铺到顶层，方便 Secluded 读取 ★★★ */
 async function apiPlayer(url) {
   const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
   if (!email) return jsonResp({ ok: false, msg: "缺少 email 参数" });
@@ -184,9 +190,8 @@ async function apiPlayer(url) {
     kills: s.kills || 0,
     wins: s.wins || 0,
     bestRank: s.bestRank || 999,
-    skinColor: user.profile?.skinColor || 0xff6b35,
-    startWeapon: user.profile?.startWeapon || "pistol",
-    startMap: user.profile?.startMap || "green"
+    banned: !!user.banned,
+    banReason: user.banReason || ""
   });
 }
 
@@ -194,6 +199,7 @@ async function apiLeaderboard() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
     const u = entry.value;
+    if (u.banned) continue;
     list.push({
       email: u.email,
       nickname: u.nickname,
@@ -211,29 +217,18 @@ async function apiLeaderboardText() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
     const u = entry.value;
-    list.push({
-      nickname: u.nickname,
-      kills: u.stats.kills || 0,
-      wins: u.stats.wins || 0
-    });
+    if (u.banned) continue;
+    list.push({ nickname: u.nickname, kills: u.stats.kills || 0, wins: u.stats.wins || 0 });
   }
   list.sort((a, b) => b.kills - a.kills || b.wins - a.wins);
   const top = list.slice(0, 10);
   let out = "🏆 击杀排行榜（前 10）\n";
   out += "━━━━━━━━━━━━━━━\n";
-  if (top.length === 0) {
-    out += "📭 暂无数据\n";
-  } else {
-    top.forEach((u, i) => {
-      out += `第${i + 1}名 · ${u.nickname} · ${u.kills}杀 ${u.wins}鸡\n`;
-    });
-  }
+  if (top.length === 0) out += "📭 暂无数据\n";
+  else top.forEach((u, i) => { out += `第${i + 1}名 · ${u.nickname} · ${u.kills}杀 ${u.wins}鸡\n`; });
   out += "━━━━━━━━━━━━━━━";
   return new Response(out, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Access-Control-Allow-Origin": "*"
-    }
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" }
   });
 }
 
@@ -282,6 +277,73 @@ async function apiFriendRemove(req) {
   return jsonResp({ ok: true });
 }
 
+/* =========================================================
+   ★ 管理员接口
+   ========================================================= */
+
+function checkAdmin(url) {
+  return url.searchParams.get("key") === ADMIN_KEY;
+}
+
+// 改数据： /api/admin/set?key=xx&email=xx&field=kills&value=999
+async function apiAdminSet(url) {
+  if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
+  const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
+  const field = String(url.searchParams.get("field") || "").trim();
+  const value = String(url.searchParams.get("value") || "");
+  const user = await getUser(email);
+  if (!user) return jsonResp({ ok: false, msg: "玩家不存在" });
+
+  if (field === "nickname") {
+    user.nickname = value.slice(0, 12);
+  } else if (["kills", "wins", "games", "bestRank"].includes(field)) {
+    user.stats[field] = Number(value) || 0;
+  } else {
+    return jsonResp({ ok: false, msg: "不支持的字段：" + field });
+  }
+  await saveUser(user);
+  return jsonResp({ ok: true, msg: "修改成功", user: publicUser(user) });
+}
+
+// 封禁： /api/admin/ban?key=xx&email=xx&reason=xxx
+async function apiAdminBan(url) {
+  if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
+  const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
+  const reason = String(url.searchParams.get("reason") || "违反规则");
+  const user = await getUser(email);
+  if (!user) return jsonResp({ ok: false, msg: "玩家不存在" });
+  user.banned = true;
+  user.banReason = reason;
+  await saveUser(user);
+  return jsonResp({ ok: true, msg: "已封禁" });
+}
+
+// 解封： /api/admin/unban?key=xx&email=xx
+async function apiAdminUnban(url) {
+  if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
+  const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
+  const user = await getUser(email);
+  if (!user) return jsonResp({ ok: false, msg: "玩家不存在" });
+  user.banned = false;
+  delete user.banReason;
+  await saveUser(user);
+  return jsonResp({ ok: true, msg: "已解封" });
+}
+
+// 封禁列表： /api/admin/banned?key=xx
+async function apiAdminBanned(url) {
+  if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
+  const list = [];
+  for await (const entry of kv.list({ prefix: ["user"] })) {
+    const u = entry.value;
+    if (u.banned) list.push({ email: u.email, nickname: u.nickname, reason: u.banReason || "" });
+  }
+  return jsonResp({ ok: true, list });
+}
+
+/* =========================================================
+   WebSocket
+   ========================================================= */
 function handleWebSocket(req) {
   const { socket, response } = Deno.upgradeWebSocket(req);
   let player = null;
@@ -301,6 +363,10 @@ function handleWebSocket(req) {
       const user = await getUser(r.value.email);
       if (!user) {
         socket.send(JSON.stringify({ type: "auth-fail", msg: "账号不存在" }));
+        return socket.close();
+      }
+      if (user.banned) {
+        socket.send(JSON.stringify({ type: "auth-fail", msg: "账号已被封禁" }));
         return socket.close();
       }
       player = {
@@ -448,6 +514,12 @@ Deno.serve(async (req) => {
   if (path === "/api/friends" && req.method === "GET") return await apiFriends(req);
   if (path === "/api/friend/add" && req.method === "POST") return await apiFriendAdd(req);
   if (path === "/api/friend/remove" && req.method === "POST") return await apiFriendRemove(req);
+
+  // 管理员接口
+  if (path === "/api/admin/set" && req.method === "GET") return await apiAdminSet(url);
+  if (path === "/api/admin/ban" && req.method === "GET") return await apiAdminBan(url);
+  if (path === "/api/admin/unban" && req.method === "GET") return await apiAdminUnban(url);
+  if (path === "/api/admin/banned" && req.method === "GET") return await apiAdminBanned(url);
 
   return await serveStatic(path);
 });

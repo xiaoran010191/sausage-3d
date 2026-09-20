@@ -214,9 +214,7 @@ input{font-family:inherit;outline:none}
     </div>
     <div class="player-card">
       <div class="avatar">🌭</div>
-      <div class="player-info">
-        <div class="player-name" id="lobbyNick">玩家</div>
-      </div>
+      <div class="player-info"><div class="player-name" id="lobbyNick">玩家</div></div>
       <button class="icon-btn" id="logoutBtn">⎋</button>
     </div>
   </div>
@@ -259,7 +257,7 @@ input{font-family:inherit;outline:none}
                 <button class="qq-btn" id="qqChangeBtn">换绑</button>
               </div>
             </div>
-            <a class="join-group-btn" id="joinGroupBtn" href="mqqapi://card/show_pslcard?src_type=internal&version=1&uin=530026271&card_type=group&source=qrcode">➕ 加入 QQ 聊天群</a>
+            <a class="join-group-btn" href="mqqapi://card/show_pslcard?src_type=internal&version=1&uin=530026271&card_type=group&source=qrcode">➕ 加入 QQ 聊天群</a>
           </div>
         </div>
         <div class="card">
@@ -274,10 +272,7 @@ input{font-family:inherit;outline:none}
         <div class="card"><h3>🎨 皮肤</h3><div style="display:flex;flex-wrap:wrap;gap:6px" id="colorGrid"></div></div>
       </div>
       <div class="panel-view hidden" id="panel-rank">
-        <div class="card">
-          <h3>🏆 排行榜</h3>
-          <div id="rankList" class="rank-list">加载中...</div>
-        </div>
+        <div class="card"><h3>🏆 排行榜</h3><div id="rankList">加载中...</div></div>
       </div>
       <div class="panel-view hidden" id="panel-friends">
         <div class="card"><h3>👥 我的好友</h3><div id="friendList" class="friend-list">加载中...</div></div>
@@ -316,7 +311,7 @@ input{font-family:inherit;outline:none}
   <div class="hud-top">
     <div class="alive-box">🌭 存活 <b id="aliveNum">13</b></div>
     <div class="zone-msg" id="zoneMsg">安全区稳定</div>
-    <div class="hud-right"><div class="fps-box" id="fpsBox">60 FPS</div><div class="net-box" id="netBox">📶 --</div></div>
+    <div class="hud-right"><div class="fps-box" id="fpsBox">60 FPS</div><div class="net-box" id="netBox">📶 单机</div></div>
   </div>
   <div class="meds-bar" id="medsBar"></div>
   <button class="pause-btn" id="pauseBtn">⏸</button>
@@ -331,6 +326,9 @@ input{font-family:inherit;outline:none}
 <div id="pauseMenu" class="hidden">
   <div class="pause-content">
     <h2>⏸ 已暂停</h2>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">音量</label><input type="range" id="pauseVolume" min="0" max="1" step="0.05" value="0.6" style="flex:1"><span id="pauseVolumeVal" style="flex:0 0 36px;text-align:right">0.60</span></div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">灵敏度</label><input type="range" id="pauseSens" min="0.4" max="3" step="0.1" value="1.2" style="flex:1"><span id="pauseSensVal" style="flex:0 0 36px;text-align:right">1.2</span></div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">辅助瞄准</label><input type="range" id="pauseAim" min="0" max="0.5" step="0.05" value="0.1" style="flex:1"><span id="pauseAimVal" style="flex:0 0 36px;text-align:right">0.10</span></div>
     <div class="pause-btns">
       <button class="btn" id="resumeBtn">▶ 继续</button>
       <button class="btn ghost" id="exitGameBtn">🏠 退出</button>
@@ -351,11 +349,11 @@ input{font-family:inherit;outline:none}
 </div>
 
 <div id="toast"></div>
+
 <script>
 /* ============================================================
    肠肠大作战 · 前端逻辑
    ============================================================ */
-
 var API = {
   token: localStorage.getItem('sd3d_token') || '',
   user: null,
@@ -366,38 +364,32 @@ var API = {
     return fetch(url, { headers: { 'x-token': API.token } }).then(function(r){ return r.json(); });
   }
 };
-
 function toast(msg, ms) {
   ms = ms || 2200;
   var el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(function(){ el.classList.remove('show'); }, ms);
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(function(){ el.classList.remove('show'); }, ms);
 }
-
 var clamp=function(v,a,b){return v<a?a:v>b?b:v;};
 var rand=function(a,b){return a+Math.random()*(b-a);};
 var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 var TAU=Math.PI*2;
 
-/* ============ 启动页 ============ */
+/* 启动页 */
 setTimeout(function(){
   var sp = document.getElementById('splashScreen');
   if (sp) { sp.classList.add('hide'); setTimeout(function(){ if(sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }
 }, 2200);
 
-/* ============ 常量 ============ */
+/* 常量 */
 var WORLD_HALF=200,TOTAL_ENEMIES=18,PLAYER_SPEED=10,CAM_DIST=5.0,CAM_HEIGHT=1.7;
 var MAX_PARTICLES=140,MAX_BULLETS=70;
 var PITCH_MIN=-0.7, PITCH_MAX=0.85;
-
 var MAPS={
   green:{name:'绿野仙踪',emoji:'🌳',skyTop:0x87CEEB,skyBottom:0xB8E0F0,ground:0x6DB56D,patch1:0x7CC47C,patch2:0x5FA85F,treeCount:90,rockCount:35,houseCount:14,trunkColor:0x8B6F47,leafColors:[0x4CAF50,0x66BB6A,0x388E3C],rockColor:0x9AA3A8,wallColor:0xF5DEB3,roofColor:0xC9544A},
   desert:{name:'黄沙戈壁',emoji:'🏜️',skyTop:0xFFC97A,skyBottom:0xFFE8C8,ground:0xD4A857,patch1:0xE0BC72,patch2:0xC49948,treeCount:25,rockCount:70,houseCount:12,trunkColor:0xA08058,leafColors:[0x8BA05E,0x9DB56E,0x7A8E52],rockColor:0xC9A870,wallColor:0xE8C88A,roofColor:0xB8763A},
   snow:{name:'冰封雪原',emoji:'❄️',skyTop:0xA8C8E0,skyBottom:0xE8F0F8,ground:0xE8F0F8,patch1:0xF5FAFF,patch2:0xD0DCE5,treeCount:55,rockCount:40,houseCount:13,trunkColor:0x5A4A3A,leafColors:[0x3A5A3A,0x4A6A4A,0x2E4E2E],rockColor:0xB8C8D8,wallColor:0xE8E8E0,roofColor:0x8B3A3A}
 };
-
 var WEAPONS={
   pistol:{key:'pistol',name:'手枪',dmg:26,rate:0.26,speed:100,spread:0.012,pellets:1,color:0xFFD23F,desc:'单发·中伤'},
   smg:{key:'smg',name:'冲锋枪',dmg:14,rate:0.075,speed:110,spread:0.030,pellets:1,color:0x7CFFB2,desc:'连发·极快'},
@@ -405,18 +397,16 @@ var WEAPONS={
   rifle:{key:'rifle',name:'突击步枪',dmg:34,rate:0.19,speed:130,spread:0.008,pellets:1,color:0x8FD8FF,desc:'单发·高伤'},
   sniper:{key:'sniper',name:'狙击枪',dmg:95,rate:1.4,speed:220,spread:0.001,pellets:1,color:0xFF6B35,desc:'一枪爆头'}
 };
-
 var SKIN_COLORS=[{c:0xff6b35},{c:0x7C4DFF},{c:0xE91E63},{c:0x43A047},{c:0x1E88E5},{c:0x00ACC1},{c:0xFB8C00},{c:0x9C27B0}];
 var MEDICINES={bandage:{name:'绷带',emoji:'🩹',heal:25,useTime:1.2,max:5},medkit:{name:'医疗箱',emoji:'💊',heal:75,useTime:2.5,max:2},energy:{name:'能量饮料',emoji:'🥤',heal:15,useTime:0.8,max:3}};
 
-var profile={skinColor:0xff6b35,startWeapon:'pistol',startMap:'green',sensitivity:1.2,aimAssist:0.1,volume:0.6,gyroSensitivity:2.0};
+var profile={skinColor:0xff6b35,startWeapon:'pistol',startMap:'green',sensitivity:1.2,aimAssist:0.1,volume:0.6};
 var currentMode='single';
 var state='auth';
 var isOnlineMode=false;
 var paused=false;
-var gyroRuntimeOn=false,lastGyroBeta=null,lastGyroGamma=null,lastGyroTime=0;
 
-/* ============ 登录/注册 ============ */
+/* 登录/注册 */
 document.getElementById('toRegister').onclick = function() {
   document.getElementById('loginForm').style.display = 'none';
   document.getElementById('registerForm').style.display = 'flex';
@@ -427,20 +417,17 @@ document.getElementById('toLogin').onclick = function() {
   document.getElementById('registerForm').style.display = 'none';
   document.getElementById('authSub').textContent = '用 QQ 邮箱登录';
 };
-
 var codeTimer = null;
 document.getElementById('sendCodeBtn').onclick = function() {
   var self = this;
   var email = document.getElementById('regEmail').value.trim();
   if (!email) return toast('请先填 QQ 邮箱');
   if (!/^[a-zA-Z0-9._-]+@qq\.com$/i.test(email)) return toast('请填正确的 QQ 邮箱');
-  self.disabled = true;
-  self.textContent = '发送中...';
+  self.disabled = true; self.textContent = '发送中...';
   API.post('/api/send-code', { email: email }).then(function(r){
     if (!r.ok) { toast(r.msg); self.disabled = false; self.textContent = '获取验证码'; return; }
     toast(r.msg);
-    var left = 60;
-    self.textContent = left + 's';
+    var left = 60; self.textContent = left + 's';
     clearInterval(codeTimer);
     codeTimer = setInterval(function(){
       left--;
@@ -449,7 +436,6 @@ document.getElementById('sendCodeBtn').onclick = function() {
     }, 1000);
   });
 };
-
 document.getElementById('regBtn').onclick = function() {
   var email = document.getElementById('regEmail').value.trim();
   var code = document.getElementById('regCode').value.trim();
@@ -466,7 +452,6 @@ document.getElementById('regBtn').onclick = function() {
     enterLobby();
   });
 };
-
 document.getElementById('loginBtn').onclick = function() {
   var email = document.getElementById('loginEmail').value.trim();
   var password = document.getElementById('loginPass').value;
@@ -479,7 +464,6 @@ document.getElementById('loginBtn').onclick = function() {
     enterLobby();
   });
 };
-
 document.getElementById('logoutBtn').onclick = function() {
   if (!confirm('退出登录？')) return;
   localStorage.removeItem('sd3d_token');
@@ -488,7 +472,6 @@ document.getElementById('logoutBtn').onclick = function() {
   document.getElementById('lobbyScreen').classList.add('hidden');
   document.getElementById('authScreen').classList.remove('hidden');
 };
-
 function tryAutoLogin() {
   var saved = localStorage.getItem('sd3d_user');
   if (API.token && saved) {
@@ -503,7 +486,6 @@ function tryAutoLogin() {
     document.getElementById('authScreen').classList.remove('hidden');
   }
 }
-
 function getLevel(kills) {
   if (kills < 10) return { lv: 1, title: '新兵入伍' };
   if (kills < 30) return { lv: 2, title: '初露锋芒' };
@@ -514,7 +496,7 @@ function getLevel(kills) {
   return { lv: 7, title: '肠肠之神' };
 }
 
-/* ============ 大厅 ============ */
+/* 大厅 */
 async function enterLobby() {
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('lobbyScreen').classList.remove('hidden');
@@ -530,7 +512,6 @@ async function enterLobby() {
   renderLobby();
   refreshFriends();
 }
-
 function renderLobby() {
   var u = API.user;
   if (!u) return;
@@ -556,8 +537,8 @@ function renderLobby() {
   renderMapGrid();
   renderWeaponGrid();
   renderColorGrid();
+  resizeLobbyCanvas();
 }
-
 function renderMapGrid() {
   var mg = document.getElementById('mapGrid');
   if (!mg) return;
@@ -571,7 +552,6 @@ function renderMapGrid() {
     mg.appendChild(b);
   });
 }
-
 function renderWeaponGrid() {
   var wg = document.getElementById('weaponGrid');
   if (!wg) return;
@@ -585,42 +565,32 @@ function renderWeaponGrid() {
     wg.appendChild(b);
   });
 }
-
 function renderColorGrid() {
   var cg = document.getElementById('colorGrid');
   if (!cg) return;
   cg.innerHTML = '';
   SKIN_COLORS.forEach(function(sc){
     var d = document.createElement('button');
-    d.className = 'color-dot';
     d.style.cssText = 'width:28px;height:28px;border-radius:50%;border:3px solid ' + (profile.skinColor === sc.c ? '#fff' : 'transparent') + ';background:#' + sc.c.toString(16).padStart(6,'0');
     d.onclick = function(){ profile.skinColor = sc.c; renderColorGrid(); if (player && player.bodyMat) player.bodyMat.color.setHex(sc.c); };
     cg.appendChild(d);
   });
 }
 
-/* ============ QQ 绑定 ============ */
+/* QQ 绑定 */
 document.getElementById('qqBindBtn').onclick = function() {
   var qq = document.getElementById('qqInput').value.trim();
   if (!/^[1-9][0-9]{4,11}$/.test(qq)) return toast('请填正确的 QQ 号');
   API.post('/api/bind-qq', { qq: qq }).then(function(r){
     toast(r.msg);
-    if (r.ok) {
-      API.user.boundQQ = qq;
-      localStorage.setItem('sd3d_user', JSON.stringify(API.user));
-      renderLobby();
-    }
+    if (r.ok) { API.user.boundQQ = qq; localStorage.setItem('sd3d_user', JSON.stringify(API.user)); renderLobby(); }
   });
 };
 document.getElementById('qqUnbindBtn').onclick = function() {
   if (!confirm('确定解绑 QQ？')) return;
   API.post('/api/unbind-qq', {}).then(function(r){
     toast(r.msg);
-    if (r.ok) {
-      API.user.boundQQ = '';
-      localStorage.setItem('sd3d_user', JSON.stringify(API.user));
-      renderLobby();
-    }
+    if (r.ok) { API.user.boundQQ = ''; localStorage.setItem('sd3d_user', JSON.stringify(API.user)); renderLobby(); }
   });
 };
 document.getElementById('qqChangeBtn').onclick = function() {
@@ -629,15 +599,11 @@ document.getElementById('qqChangeBtn').onclick = function() {
   if (!/^[1-9][0-9]{4,11}$/.test(qq)) return toast('QQ 号格式不对');
   API.post('/api/bind-qq', { qq: qq }).then(function(r){
     toast(r.msg);
-    if (r.ok) {
-      API.user.boundQQ = qq;
-      localStorage.setItem('sd3d_user', JSON.stringify(API.user));
-      renderLobby();
-    }
+    if (r.ok) { API.user.boundQQ = qq; localStorage.setItem('sd3d_user', JSON.stringify(API.user)); renderLobby(); }
   });
 };
 
-/* ============ 排行榜 ============ */
+/* 排行榜 & 好友 */
 function loadLeaderboard() {
   var el = document.getElementById('rankList');
   el.innerHTML = '加载中...';
@@ -682,7 +648,7 @@ document.getElementById('addFriendBtn').onclick = function(){
   });
 };
 
-/* ============ 选项卡 / 模式 ============ */
+/* 选项卡 / 模式 */
 document.querySelectorAll('.tab').forEach(function(t){
   t.onclick = function(){
     document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
@@ -703,9 +669,27 @@ document.querySelectorAll('.mode-card').forEach(function(b){
   };
 });
 
-/* ============ 大厅小人 ============ */
+/* 设置滑块 */
+(function(){
+  var el1 = document.getElementById('volumeSlider');
+  var el2 = document.getElementById('sensSlider');
+  var el3 = document.getElementById('aimAssistSlider');
+  if (el1) el1.addEventListener('input', function(e){ profile.volume = parseFloat(e.target.value); document.getElementById('volumeValue').textContent = profile.volume.toFixed(2); if (masterGain) masterGain.gain.value = profile.volume; });
+  if (el2) el2.addEventListener('input', function(e){ profile.sensitivity = parseFloat(e.target.value); document.getElementById('sensValue').textContent = profile.sensitivity.toFixed(1); });
+  if (el3) el3.addEventListener('input', function(e){ profile.aimAssist = parseFloat(e.target.value); document.getElementById('aimAssistValue').textContent = profile.aimAssist.toFixed(2); });
+})();
+
+/* 大厅小人 */
 var lobbyCanvas = document.getElementById('lobbyCanvas');
 var lobbyCtx = lobbyCanvas ? lobbyCanvas.getContext('2d') : null;
+function resizeLobbyCanvas() {
+  if (!lobbyCanvas || !lobbyCtx) return;
+  var rect = lobbyCanvas.getBoundingClientRect();
+  var dpr = Math.min(devicePixelRatio, 2);
+  lobbyCanvas.width = Math.floor(rect.width * dpr) || 200;
+  lobbyCanvas.height = Math.floor(rect.height * dpr) || 200;
+  lobbyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
 function drawLobbySausage(t) {
   if (!lobbyCtx) return;
   var w = lobbyCanvas.width, h = lobbyCanvas.height;
@@ -728,17 +712,66 @@ function drawLobbySausage(t) {
   lobbyCtx.restore();
 }
 function lobbyLoop(t) { drawLobbySausage(t); requestAnimationFrame(lobbyLoop); }
-function resizeLobbyCanvas() {
-  if (!lobbyCanvas) return;
-  var rect = lobbyCanvas.getBoundingClientRect();
-  var dpr = Math.min(devicePixelRatio, 2);
-  lobbyCanvas.width = Math.floor(rect.width * dpr);
-  lobbyCanvas.height = Math.floor(rect.height * dpr);
-  lobbyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
 window.addEventListener('resize', resizeLobbyCanvas);
 
-/* ============ 3D 引擎 ============ */
+/* 音频 */
+var audioCtx=null,masterGain=null;
+function initAudio(){
+  if(audioCtx)return;
+  try{
+    var AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return;
+    audioCtx=new AC();
+    masterGain=audioCtx.createGain();
+    masterGain.gain.value=profile.volume||0.6;
+    masterGain.connect(audioCtx.destination);
+  }catch(e){}
+}
+function resumeAudio(){if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});}
+function playNoise(dur,f1,f2,vol){
+  if(!audioCtx)return;
+  var t=audioCtx.currentTime;
+  var sz=Math.max(1,Math.floor(audioCtx.sampleRate*dur));
+  var buf=audioCtx.createBuffer(1,sz,audioCtx.sampleRate);
+  var d=buf.getChannelData(0);
+  for(var i=0;i<sz;i++)d[i]=(Math.random()*2-1)*(1-i/sz);
+  var src=audioCtx.createBufferSource(); src.buffer=buf;
+  var flt=audioCtx.createBiquadFilter(); flt.type='lowpass';
+  flt.frequency.setValueAtTime(f1,t);
+  flt.frequency.exponentialRampToValueAtTime(Math.max(20,f2),t+dur);
+  var g=audioCtx.createGain(); g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(flt); flt.connect(g); g.connect(masterGain);
+  src.start(t); src.stop(t+dur+0.02);
+}
+function playTone(f1,f2,dur,vol,type){
+  if(!audioCtx)return;
+  var t=audioCtx.currentTime;
+  var o=audioCtx.createOscillator(); o.type=type||'sine';
+  o.frequency.setValueAtTime(f1,t);
+  if(f2!==f1)o.frequency.exponentialRampToValueAtTime(Math.max(20,f2),t+dur);
+  var g=audioCtx.createGain(); g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+dur+0.02);
+}
+function sfxShoot(k){
+  if(!audioCtx)return;
+  var cfg={
+    pistol:function(){playNoise(0.09,2200,200,0.5);playTone(180,60,0.09,0.35,'square');},
+    smg:function(){playNoise(0.05,2600,400,0.35);playTone(220,100,0.05,0.22,'square');},
+    shotgun:function(){playNoise(0.18,1400,80,0.7);playTone(120,40,0.18,0.5,'sawtooth');},
+    rifle:function(){playNoise(0.08,3000,300,0.55);playTone(260,80,0.09,0.4,'square');},
+    sniper:function(){playNoise(0.28,1200,60,0.8);playTone(90,30,0.28,0.6,'sawtooth');}
+  };
+  (cfg[k]||cfg.pistol)();
+}
+function sfxHurt(){if(!audioCtx)return;playTone(320,90,0.2,0.42,'triangle');playNoise(0.12,800,200,0.3);}
+function sfxKill(){if(audioCtx)[523,659,784].forEach(function(n,i){setTimeout(function(){playTone(n,n,0.12,0.35);},i*90);});}
+function sfxPickup(){if(!audioCtx)return;playTone(500,900,0.12,0.35);setTimeout(function(){playTone(900,1300,0.12,0.3);},80);}
+function sfxWin(){if(audioCtx)[523,659,784,1047].forEach(function(n,i){setTimeout(function(){playTone(n,n,0.25,0.4);},i*130);});}
+function sfxLose(){if(audioCtx){playTone(400,200,0.32,0.42,'triangle');setTimeout(function(){playTone(280,130,0.42,0.42,'triangle');},220);}}
+
+/* 3D 引擎 */
 var scene,camera,renderer,playerGroup,playerMuzzle;
 var player={hp:100,maxHp:100,weapon:null,cool:0,dead:false,bodyMat:null,meds:{bandage:2,medkit:1,energy:1},usingMed:null,useTimer:0};
 var enemies=[],bullets=[],particles=[],pickups=[],obstacles=[],houses=[],remotePlayers={};
@@ -910,8 +943,7 @@ function createSausage(color){
     var b=new THREE.Mesh(SG.eyeB,eyeB); b.position.set(sx*0.175,0.19,0.44); g.add(b);
     var bl=new THREE.Mesh(SG.blush,blush); bl.position.set(sx*0.33,0,0.32); bl.rotation.y=sx*0.65; g.add(bl);
   }
-  var hatColor=color===0xff6b35?0xFFD23F:0xFFFFFF;
-  var hatMat=new THREE.MeshLambertMaterial({color:hatColor});
+  var hatMat=new THREE.MeshLambertMaterial({color:color===0xff6b35?0xFFD23F:0xFFFFFF});
   var hatStem=new THREE.Mesh(SG.hatStem,hatMat); hatStem.position.y=0.9; g.add(hatStem);
   var hatBall=new THREE.Mesh(SG.hatBall,hatMat); hatBall.position.y=1.05; g.add(hatBall);
   var gun=new THREE.Group();
@@ -1044,7 +1076,6 @@ function applyAimAssist(dir,startPos){
   var best=null,bestDot=0.92,bestDist=80*80;
   var targets=[];
   enemies.forEach(function(e){if(!e.dead)targets.push({pos:e.group.position});});
-  Object.keys(remotePlayers).forEach(function(id){var rp=remotePlayers[id];if(rp.alive)targets.push({pos:rp.group.position});});
   for(var i=0;i<targets.length;i++){
     var t=targets[i];
     var dx=t.pos.x-startPos.x,dy=(t.pos.y+0.2)-startPos.y,dz=t.pos.z-startPos.z;
@@ -1410,35 +1441,19 @@ function updateDoors(dt){
     }
   }
 }
-function updateRemotePlayers(dt){
-  var lerpFactor=Math.min(1,dt*14);
-  var ids=Object.keys(remotePlayers);
-  for(var i=0;i<ids.length;i++){
-    var rp=remotePlayers[ids[i]];
-    if(!rp.targetPos)continue;
-    rp.group.position.x+=(rp.targetPos.x-rp.group.position.x)*lerpFactor;
-    rp.group.position.z+=(rp.targetPos.z-rp.group.position.z)*lerpFactor;
-    rp.group.position.y=0.8;
-    var diff=rp.targetAng-rp.group.rotation.y;
-    while(diff>Math.PI)diff-=TAU; while(diff<-Math.PI)diff+=TAU;
-    rp.group.rotation.y+=diff*lerpFactor*0.9;
-  }
-}
 function update(dt){
   gameTime+=dt;
   if(hurtCooldown>0)hurtCooldown-=dt;
   updatePlayer(dt); updateCamera(); updateEnemies(dt); updateBullets(dt);
   updatePickups(dt); updateParticles(dt); updateZone(dt); updateDoors(dt);
-  updateRemotePlayers(dt); checkWin();
+  checkWin();
   if(!player.dead&&!player.usingMed&&!paused){
     player.cool-=dt;
     if((mouseDown||mtAim)&&player.cool<=0)firePlayerWeapon();
   }
   updateHUD(false);
 }
-
-/* ============ HUD ============ */
-var lastAlive=-1,lastHp=-1,lastWeapon='',lastZone='',lastNet='',lastFps='';
+var lastAlive=-1,lastHp=-1,lastWeapon='',lastZone='',lastFps='';
 function updateHUD(force){
   var hud=document.getElementById('hud');
   if(!hud)return;
@@ -1477,8 +1492,6 @@ function updateHUD(force){
     else{zm.textContent='安全区稳定';zm.style.color='#7CFFB2';}
     lastZone=zs;
   }
-  var ns=isOnlineMode?'📶 联机':'📶 单机';
-  if(ns!==lastNet){document.getElementById('netBox').textContent=ns;lastNet=ns;}
   var fpsStr=fpsValue+' FPS';
   if(fpsStr!==lastFps){document.getElementById('fpsBox').textContent=fpsStr;lastFps=fpsStr;}
 }
@@ -1503,123 +1516,63 @@ function flashHurt(){
   hurtTimer=setTimeout(function(){el.style.opacity='0';},100);
 }
 
-/* ============ 音频 ============ */
-var audioCtx=null,masterGain=null;
-function initAudio(){
-  if(audioCtx)return;
-  try{
-    var AC=window.AudioContext||window.webkitAudioContext;
-    if(!AC)return;
-    audioCtx=new AC();
-    masterGain=audioCtx.createGain();
-    masterGain.gain.value=profile.volume||0.6;
-    masterGain.connect(audioCtx.destination);
-  }catch(e){}
-}
-function resumeAudio(){if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});}
-function playNoise(dur,f1,f2,vol){
-  if(!audioCtx)return;
-  var t=audioCtx.currentTime;
-  var sz=Math.max(1,Math.floor(audioCtx.sampleRate*dur));
-  var buf=audioCtx.createBuffer(1,sz,audioCtx.sampleRate);
-  var d=buf.getChannelData(0);
-  for(var i=0;i<sz;i++)d[i]=(Math.random()*2-1)*(1-i/sz);
-  var src=audioCtx.createBufferSource(); src.buffer=buf;
-  var flt=audioCtx.createBiquadFilter(); flt.type='lowpass';
-  flt.frequency.setValueAtTime(f1,t);
-  flt.frequency.exponentialRampToValueAtTime(Math.max(20,f2),t+dur);
-  var g=audioCtx.createGain(); g.gain.setValueAtTime(vol,t);
-  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
-  src.connect(flt); flt.connect(g); g.connect(masterGain);
-  src.start(t); src.stop(t+dur+0.02);
-}
-function playTone(f1,f2,dur,vol,type){
-  if(!audioCtx)return;
-  var t=audioCtx.currentTime;
-  var o=audioCtx.createOscillator(); o.type=type||'sine';
-  o.frequency.setValueAtTime(f1,t);
-  if(f2!==f1)o.frequency.exponentialRampToValueAtTime(Math.max(20,f2),t+dur);
-  var g=audioCtx.createGain(); g.gain.setValueAtTime(vol,t);
-  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
-  o.connect(g); g.connect(masterGain); o.start(t); o.stop(t+dur+0.02);
-}
-function sfxShoot(k){
-  if(!audioCtx)return;
-  var cfg={
-    pistol:function(){playNoise(0.09,2200,200,0.5);playTone(180,60,0.09,0.35,'square');},
-    smg:function(){playNoise(0.05,2600,400,0.35);playTone(220,100,0.05,0.22,'square');},
-    shotgun:function(){playNoise(0.18,1400,80,0.7);playTone(120,40,0.18,0.5,'sawtooth');},
-    rifle:function(){playNoise(0.08,3000,300,0.55);playTone(260,80,0.09,0.4,'square');},
-    sniper:function(){playNoise(0.28,1200,60,0.8);playTone(90,30,0.28,0.6,'sawtooth');}
-  };
-  (cfg[k]||cfg.pistol)();
-}
-function sfxHurt(){if(!audioCtx)return;playTone(320,90,0.2,0.42,'triangle');playNoise(0.12,800,200,0.3);}
-function sfxKill(){if(audioCtx)[523,659,784].forEach(function(n,i){setTimeout(function(){playTone(n,n,0.12,0.35);},i*90);});}
-function sfxPickup(){if(!audioCtx)return;playTone(500,900,0.12,0.35);setTimeout(function(){playTone(900,1300,0.12,0.3);},80);}
-function sfxWin(){if(audioCtx)[523,659,784,1047].forEach(function(n,i){setTimeout(function(){playTone(n,n,0.25,0.4);},i*130);});}
-function sfxLose(){if(audioCtx){playTone(400,200,0.32,0.42,'triangle');setTimeout(function(){playTone(280,130,0.42,0.42,'triangle');},220);}}
-
-/* ============ 陀螺仪 ============ */
-function requestGyroPermission(){
-  if(typeof DeviceOrientationEvent==='undefined')return Promise.resolve(false);
-  if(typeof DeviceOrientationEvent.requestPermission==='function'){
-    return DeviceOrientationEvent.requestPermission().then(function(res){
-      if(res!=='granted')return false;
-      return probeGyro();
-    }).catch(function(){return false;});
+/* 全屏 */
+(function(){
+  var fsBtn = document.createElement('button');
+  fsBtn.id = 'fsOverlayBtn';
+  fsBtn.innerHTML = '点击进入全屏<br><span style="font-size:14px;opacity:.7;letter-spacing:2px">（体验更好）</span>';
+  fsBtn.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.88);color:#FFD23F;font-size:26px;font-weight:900;letter-spacing:6px;border:none;font-family:inherit;cursor:pointer;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px';
+  document.body.appendChild(fsBtn);
+  function isFs(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function reqFs(){
+    var el = document.documentElement;
+    var fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) { try { fn.call(el); } catch(e){} }
+    if (screen.orientation && screen.orientation.lock) {
+      try { screen.orientation.lock('landscape').catch(function(){}); } catch(e){}
+    }
   }
-  return probeGyro();
+  function updateFs(){ fsBtn.style.display = isFs() ? 'none' : 'flex'; }
+  fsBtn.addEventListener('click', function(){ reqFs(); setTimeout(updateFs, 300); });
+  fsBtn.addEventListener('touchstart', function(e){ e.preventDefault(); reqFs(); setTimeout(updateFs, 300); });
+  document.addEventListener('fullscreenchange', updateFs);
+  document.addEventListener('webkitfullscreenchange', updateFs);
+  setTimeout(updateFs, 1000);
+})();
+
+/* 横屏检测 */
+function checkOrientation(){
+  var oo = document.getElementById('orientOverlay');
+  if (!oo) return;
+  if (state !== 'playing' || !isOnMobile) { oo.classList.add('hidden'); return; }
+  if (innerHeight > innerWidth) oo.classList.remove('hidden');
+  else oo.classList.add('hidden');
 }
-function probeGyro(){
-  return new Promise(function(resolve){
-    var received=false;
-    var probe=function(e){if(e.alpha!==null||e.beta!==null||e.gamma!==null)received=true;};
-    window.addEventListener('deviceorientation',probe,true);
-    setTimeout(function(){
-      window.removeEventListener('deviceorientation',probe,true);
-      if(received){
-        window.addEventListener('deviceorientation',onGyro,true);
-        gyroRuntimeOn=true; lastGyroBeta=null; lastGyroGamma=null;
-        resolve(true);
-      }else resolve(false);
-    },1200);
-  });
+window.addEventListener('resize', checkOrientation);
+
+/* 暂停/继续 */
+function pauseGame(){
+  if(state!=='playing'||paused)return;
+  paused=true;
+  document.getElementById('pauseMenu').classList.remove('hidden');
 }
-function onGyro(e){
-  if(!gyroRuntimeOn||state!=='playing'||paused)return;
-  var beta=e.beta||0,gamma=e.gamma||0;
-  if(lastGyroBeta===null){lastGyroBeta=beta;lastGyroGamma=gamma;lastGyroTime=performance.now();return;}
-  var now=performance.now();
-  var dt=(now-lastGyroTime)/1000;
-  if(dt<=0||dt>0.2)dt=0.016;
-  lastGyroTime=now;
-  var dBeta=beta-lastGyroBeta,dGamma=gamma-lastGyroGamma;
-  if(dBeta>180)dBeta-=360; if(dBeta<-180)dBeta+=360;
-  if(dGamma>180)dGamma-=360; if(dGamma<-180)dGamma+=360;
-  lastGyroBeta=beta; lastGyroGamma=gamma;
-  var orient=0;
-  if(screen.orientation&&screen.orientation.angle!==undefined)orient=screen.orientation.angle;
-  else if(window.orientation!==undefined)orient=window.orientation;
-  var dYaw,dPitch;
-  if(orient===90){dYaw=-dBeta;dPitch=dGamma;}
-  else if(orient===-90||orient===270){dYaw=dBeta;dPitch=-dGamma;}
-  else if(orient===180||orient===-180){dYaw=-dGamma;dPitch=-dBeta;}
-  else{dYaw=dGamma;dPitch=dBeta;}
-  if(Math.abs(dYaw)<0.3)dYaw=0;
-  if(Math.abs(dPitch)<0.3)dPitch=0;
-  if(dYaw>4)dYaw=4; if(dYaw<-4)dYaw=-4;
-  if(dPitch>4)dPitch=4; if(dPitch<-4)dPitch=-4;
-  var sens=profile.gyroSensitivity||1;
-  var yawDelta=dYaw*0.012*sens;
-  var pitchDelta=dPitch*0.010*sens;
-  if(yawDelta>0.05)yawDelta=0.05; if(yawDelta<-0.05)yawDelta=-0.05;
-  if(pitchDelta>0.05)pitchDelta=0.05; if(pitchDelta<-0.05)pitchDelta=-0.05;
-  camYaw-=yawDelta;
-  camPitch=clamp(camPitch+pitchDelta,PITCH_MIN,PITCH_MAX);
+function resumeGame(){
+  if(state!=='playing')return;
+  paused=false;
+  document.getElementById('pauseMenu').classList.add('hidden');
 }
 
-/* ============ 虚拟摇杆 ============ */
+/* 暂停菜单滑块 */
+(function(){
+  var pv = document.getElementById('pauseVolume');
+  var ps = document.getElementById('pauseSens');
+  var pa = document.getElementById('pauseAim');
+  if (pv) pv.addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.volume = v; document.getElementById('pauseVolumeVal').textContent = v.toFixed(2); if (masterGain) masterGain.gain.value = v; var s = document.getElementById('volumeSlider'); if (s) { s.value = v; document.getElementById('volumeValue').textContent = v.toFixed(2); } });
+  if (ps) ps.addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.sensitivity = v; document.getElementById('pauseSensVal').textContent = v.toFixed(1); var s = document.getElementById('sensSlider'); if (s) { s.value = v; document.getElementById('sensValue').textContent = v.toFixed(1); } });
+  if (pa) pa.addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.aimAssist = v; document.getElementById('pauseAimVal').textContent = v.toFixed(2); var s = document.getElementById('aimAssistSlider'); if (s) { s.value = v; document.getElementById('aimAssistValue').textContent = v.toFixed(2); } });
+})();
+
+/* 虚拟摇杆 */
 var stickCanvas=document.createElement('canvas');
 stickCanvas.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:11';
 document.body.appendChild(stickCanvas);
@@ -1665,97 +1618,7 @@ function paintSticks(){
 }
 (function stickLoop(){paintSticks();requestAnimationFrame(stickLoop);})();
 
-/* ============ WebSocket 联机 ============ */
-var ws=null,myPlayerId=null,syncTimer=0;
-function connectWS(){
-  if(ws&&ws.readyState===1)return Promise.resolve();
-  return new Promise(function(resolve){
-    var proto=location.protocol==='https:'?'wss:':'ws:';
-    ws=new WebSocket(proto+'//'+location.host);
-    ws.onopen=function(){ws.send(JSON.stringify({type:'auth',token:API.token}));};
-    ws.onmessage=function(ev){
-      var msg; try{msg=JSON.parse(ev.data);}catch(e){return;}
-      if(msg.type==='auth-ok'){myPlayerId=msg.id;resolve();}
-      else if(msg.type==='state'&&remotePlayers[msg.id]){
-        var rp=remotePlayers[msg.id];
-        rp.targetPos={x:msg.x,z:msg.z}; rp.targetAng=msg.ang||0;
-        rp.hp=msg.hp; rp.alive=msg.alive!==false; rp.group.visible=rp.alive;
-      }
-      else if(msg.type==='player-join'){addRemotePlayer(msg);}
-      else if(msg.type==='player-leave'&&remotePlayers[msg.id]){
-        scene.remove(remotePlayers[msg.id].group); delete remotePlayers[msg.id];
-      }
-    };
-  });
-}
-function addRemotePlayer(data){
-  if(remotePlayers[data.id])return;
-  var p=createSausage(data.skin||0xff6b35);
-  p.group.position.set(data.x||0,0.8,data.z||0);
-  scene.add(p.group);
-  remotePlayers[data.id]={id:data.id,group:p.group,nickname:data.nickname||'玩家',skin:data.skin||0xff6b35,hp:100,alive:true,targetPos:{x:data.x||0,z:data.z||0},targetAng:0};
-}
-
-/* ============ 加载 & 开始 ============ */
-function showLoadingThenStart(){
-  var lo=document.getElementById('loadOverlay');
-  if(!lo)return startGameActual();
-  lo.classList.remove('hidden');
-  document.getElementById('loadFill').style.width='0%';
-  document.getElementById('loadPct').textContent='0%';
-  var steps=[12,28,48,68,85,96,100];
-  var idx=0;
-  function next(){
-    if(idx>=steps.length){setTimeout(function(){lo.classList.add('hidden');startGameActual();},220);return;}
-    var p=steps[idx++];
-    document.getElementById('loadFill').style.width=p+'%';
-    document.getElementById('loadPct').textContent=p+'%';
-    setTimeout(next,150);
-  }
-  next();
-}
-function startGameActual(){
-  disposeScene();
-  if(!scene)initThree();
-  buildWorld(profile.startMap||'green');
-  createPlayer();
-  resetGame();
-  state='playing'; paused=false;
-  document.getElementById('lobbyScreen').classList.add('hidden');
-  document.getElementById('endScreen').classList.add('hidden');
-  document.getElementById('pauseMenu').classList.add('hidden');
-  document.getElementById('loadOverlay').classList.add('hidden');
-  document.getElementById('hud').classList.add('show');
-  lastAlive=-1; lastHp=-1; lastWeapon=''; lastZone=''; lastNet='';
-}
-function pauseGame(){
-  if(state!=='playing'||paused)return;
-  paused=true;
-  document.getElementById('pauseMenu').classList.remove('hidden');
-}
-function resumeGame(){
-  if(state!=='playing')return;
-  paused=false;
-  document.getElementById('pauseMenu').classList.add('hidden');
-}
-async function endGame(win){
-  if(state==='over')return;
-  state='over'; paused=false;
-  var rank=win?1:(enemies.filter(function(e){return !e.dead;}).length+2);
-  try{ await API.post('/api/result',{kills:kills,rank:rank,win:win}); }catch(e){}
-  document.getElementById('statKills').textContent=kills;
-  document.getElementById('statTime').textContent=Math.floor(gameTime)+'s';
-  document.getElementById('statRank').textContent='#'+rank;
-  var title=document.getElementById('endTitle'),sub=document.getElementById('endSub'),icon=document.getElementById('endIcon');
-  if(win){title.textContent='大吉大利'; title.className='result-title win'; sub.textContent='今晚吃肠！ 🌭'; icon.textContent='🏆';}
-  else{title.textContent='你被淘汰了'; title.className='result-title lose'; sub.textContent='最终排名 #'+rank+' · 淘汰 '+kills+' 人'; icon.textContent='💀';}
-  setTimeout(function(){
-    document.getElementById('endScreen').classList.remove('hidden');
-    document.getElementById('hud').classList.remove('show');
-  },800);
-}
-
-/* ============ 事件绑定 ============ */
+/* 输入 */
 window.addEventListener('keydown',function(e){
   if(!e.key)return;
   var k=e.key.toLowerCase();
@@ -1772,7 +1635,6 @@ window.addEventListener('keydown',function(e){
   }
 });
 window.addEventListener('keyup',function(e){if(e.key)keys[e.key.toLowerCase()]=false;});
-
 function bindInput(){
   if(!renderer)return;
   renderer.domElement.addEventListener('mousedown',function(e){if(e.button===0)mouseDown=true;});
@@ -1819,10 +1681,61 @@ function bindInput(){
   window.addEventListener('resize',function(){
     if(camera){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
     resizeLobbyCanvas();
+    checkOrientation();
   });
 }
 
-/* ============ 按钮绑定 ============ */
+/* 加载 & 开始 */
+function showLoadingThenStart(){
+  var lo=document.getElementById('loadOverlay');
+  if(!lo)return startGameActual();
+  lo.classList.remove('hidden');
+  document.getElementById('loadFill').style.width='0%';
+  document.getElementById('loadPct').textContent='0%';
+  var steps=[12,28,48,68,85,96,100];
+  var idx=0;
+  function next(){
+    if(idx>=steps.length){setTimeout(function(){lo.classList.add('hidden');startGameActual();},220);return;}
+    var p=steps[idx++];
+    document.getElementById('loadFill').style.width=p+'%';
+    document.getElementById('loadPct').textContent=p+'%';
+    setTimeout(next,150);
+  }
+  next();
+}
+function startGameActual(){
+  disposeScene();
+  if(!scene)initThree();
+  buildWorld(profile.startMap||'green');
+  createPlayer();
+  resetGame();
+  state='playing'; paused=false;
+  document.getElementById('lobbyScreen').classList.add('hidden');
+  document.getElementById('endScreen').classList.add('hidden');
+  document.getElementById('pauseMenu').classList.add('hidden');
+  document.getElementById('loadOverlay').classList.add('hidden');
+  document.getElementById('hud').classList.add('show');
+  lastAlive=-1; lastHp=-1; lastWeapon=''; lastZone=''; lastNet='';
+  checkOrientation();
+}
+async function endGame(win){
+  if(state==='over')return;
+  state='over'; paused=false;
+  var rank=win?1:(enemies.filter(function(e){return !e.dead;}).length+2);
+  try{ await API.post('/api/result',{kills:kills,rank:rank,win:win}); }catch(e){}
+  document.getElementById('statKills').textContent=kills;
+  document.getElementById('statTime').textContent=Math.floor(gameTime)+'s';
+  document.getElementById('statRank').textContent='#'+rank;
+  var title=document.getElementById('endTitle'),sub=document.getElementById('endSub'),icon=document.getElementById('endIcon');
+  if(win){title.textContent='大吉大利'; title.className='result-title win'; sub.textContent='今晚吃肠！ 🌭'; icon.textContent='🏆';}
+  else{title.textContent='你被淘汰了'; title.className='result-title lose'; sub.textContent='最终排名 #'+rank+' · 淘汰 '+kills+' 人'; icon.textContent='💀';}
+  setTimeout(function(){
+    document.getElementById('endScreen').classList.remove('hidden');
+    document.getElementById('hud').classList.remove('show');
+  },800);
+}
+
+/* 按钮绑定 */
 document.getElementById('playBtn').onclick=function(){
   initAudio(); resumeAudio();
   isOnlineMode=(currentMode==='online');
@@ -1851,7 +1764,7 @@ document.getElementById('backToLobbyBtn').onclick=function(){
   renderLobby();
 };
 
-/* ============ 主循环 ============ */
+/* 主循环 */
 function loop(now){
   var dt=(now-lastTime)/1000;
   lastTime=now;
@@ -1863,7 +1776,7 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 
-/* ============ 启动 ============ */
+/* 启动 */
 function bootGame(){
   initThree();
   bindInput();
@@ -1871,103 +1784,12 @@ function bootGame(){
 }
 if(window.THREE){ bootGame(); }
 else { window.addEventListener('three-ready', bootGame, {once:true}); }
-
 setTimeout(function(){
   resizeLobbyCanvas();
   requestAnimationFrame(lobbyLoop);
   tryAutoLogin();
 }, 200);
-
 document.addEventListener('click', function(){ initAudio(); resumeAudio(); }, {once:true});
-<script>
-/* ===== 补丁 v1：全屏 + 横屏 + 设置滑块 + 游戏内设置 + 皮肤刷新 ===== */
-
-// 1. 全屏按钮
-(function(){
-  var fsBtn = document.createElement('button');
-  fsBtn.id = 'fsOverlayBtn';
-  fsBtn.innerHTML = '点击进入全屏<br><span style="font-size:14px;opacity:.7;letter-spacing:2px">（体验更好）</span>';
-  fsBtn.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.88);color:#FFD23F;font-size:26px;font-weight:900;letter-spacing:6px;border:none;font-family:inherit;cursor:pointer;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px';
-  document.body.appendChild(fsBtn);
-  function isFs(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
-  function reqFs(){
-    var el = document.documentElement;
-    var fn = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (fn) { try { fn.call(el); } catch(e){} }
-    if (screen.orientation && screen.orientation.lock) {
-      try { screen.orientation.lock('landscape').catch(function(){}); } catch(e){}
-    }
-  }
-  function updateFs(){ fsBtn.style.display = isFs() ? 'none' : 'flex'; }
-  fsBtn.addEventListener('click', function(){ reqFs(); setTimeout(updateFs, 300); });
-  fsBtn.addEventListener('touchstart', function(e){ e.preventDefault(); reqFs(); setTimeout(updateFs, 300); });
-  document.addEventListener('fullscreenchange', updateFs);
-  document.addEventListener('webkitfullscreenchange', updateFs);
-  setTimeout(updateFs, 1000);
-})();
-
-// 2. 横屏检测
-function checkOrientation(){
-  var oo = document.getElementById('orientOverlay');
-  if (!oo) return;
-  if (state !== 'playing' || !isOnMobile) { oo.classList.add('hidden'); return; }
-  if (innerHeight > innerWidth) oo.classList.remove('hidden');
-  else oo.classList.add('hidden');
-}
-window.addEventListener('resize', checkOrientation);
-window.addEventListener('orientationchange', function(){ setTimeout(checkOrientation, 300); });
-
-// 3. 设置滑块
-(function(){
-  var map = {
-    volumeSlider: function(v){ profile.volume = v; document.getElementById('volumeValue').textContent = v.toFixed(2); if (masterGain) masterGain.gain.value = v; },
-    sensSlider: function(v){ profile.sensitivity = v; document.getElementById('sensValue').textContent = v.toFixed(1); },
-    aimAssistSlider: function(v){ profile.aimAssist = v; document.getElementById('aimAssistValue').textContent = v.toFixed(2); }
-  };
-  Object.keys(map).forEach(function(id){
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', function(e){ map[id](parseFloat(e.target.value)); });
-    el.addEventListener('change', function(e){ map[id](parseFloat(e.target.value)); });
-  });
-})();
-
-// 4. 大厅强制刷新皮肤/地图/武器
-setTimeout(function(){
-  if (typeof renderColorGrid === 'function') renderColorGrid();
-  if (typeof renderMapGrid === 'function') renderMapGrid();
-  if (typeof renderWeaponGrid === 'function') renderWeaponGrid();
-  if (typeof resizeLobbyCanvas === 'function') resizeLobbyCanvas();
-}, 500);
-
-// 5. 游戏内暂停菜单重建（加音量/灵敏度/辅助瞄准滑块）
-(function(){
-  var pc = document.querySelector('.pause-content');
-  if (!pc) return;
-  pc.innerHTML = '<h2>⏸ 已暂停</h2>' +
-    '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">音量</label><input type="range" id="pauseVolume" min="0" max="1" step="0.05" value="' + profile.volume + '" style="flex:1"><span id="pauseVolumeVal" style="flex:0 0 36px;text-align:right">' + profile.volume.toFixed(2) + '</span></div>' +
-    '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">灵敏度</label><input type="range" id="pauseSens" min="0.4" max="3" step="0.1" value="' + profile.sensitivity + '" style="flex:1"><span id="pauseSensVal" style="flex:0 0 36px;text-align:right">' + profile.sensitivity.toFixed(1) + '</span></div>' +
-    '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">辅助瞄准</label><input type="range" id="pauseAim" min="0" max="0.5" step="0.05" value="' + profile.aimAssist + '" style="flex:1"><span id="pauseAimVal" style="flex:0 0 36px;text-align:right">' + profile.aimAssist.toFixed(2) + '</span></div>' +
-    '<div class="pause-btns"><button class="btn" id="resumeBtn2">▶ 继续</button><button class="btn ghost" id="exitGameBtn2">🏠 退出</button></div>';
-  document.getElementById('pauseVolume').addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.volume = v; document.getElementById('pauseVolumeVal').textContent = v.toFixed(2); if (masterGain) masterGain.gain.value = v; });
-  document.getElementById('pauseSens').addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.sensitivity = v; document.getElementById('pauseSensVal').textContent = v.toFixed(1); });
-  document.getElementById('pauseAim').addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.aimAssist = v; document.getElementById('pauseAimVal').textContent = v.toFixed(2); });
-  document.getElementById('resumeBtn2').onclick = resumeGame;
-  document.getElementById('exitGameBtn2').onclick = function(){
-    if (!confirm('退出到大厅？')) return;
-    paused = false;
-    document.getElementById('pauseMenu').classList.add('hidden');
-    state = 'menu';
-    document.getElementById('hud').classList.remove('show');
-    document.getElementById('lobbyScreen').classList.remove('hidden');
-    renderLobby();
-  };
-})();
-
-// 6. 排行榜调试（打开网页后按F12在控制台输入 testLeaderboard() 看返回）
-window.testLeaderboard = function(){
-  fetch('/api/leaderboard').then(r=>r.json()).then(d=>{ console.log('排行榜API返回:', d); alert('排行榜API返回: ' + JSON.stringify(d).slice(0, 300)); });
-};
 </script>
 </body>
 </html>

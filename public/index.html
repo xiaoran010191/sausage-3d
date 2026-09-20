@@ -165,10 +165,8 @@ input{font-family:inherit;outline:none}
 @keyframes splashLoad{0%{width:0}100%{width:100%}}
 @media(max-width:760px){
   .lobby-main{flex-direction:column}
-  .character-area{flex:0 0 auto;height:20vh;min-height:110px;padding:6px}
-  #lobbyCanvas{max-width:100px}
-  .char-name{font-size:12px;margin-top:2px}
-  .panels{padding:6px 10px}
+  .character-area{display:none!important}
+  .panels{padding:6px 10px;width:100%}
 }
 </style>
 </head>
@@ -351,9 +349,6 @@ input{font-family:inherit;outline:none}
 <div id="toast"></div>
 
 <script>
-/* ============================================================
-   肠肠大作战 · 前端逻辑
-   ============================================================ */
 var API = {
   token: localStorage.getItem('sd3d_token') || '',
   user: null,
@@ -375,13 +370,11 @@ var rand=function(a,b){return a+Math.random()*(b-a);};
 var pick=function(a){return a[Math.floor(Math.random()*a.length)];};
 var TAU=Math.PI*2;
 
-/* 启动页 */
 setTimeout(function(){
   var sp = document.getElementById('splashScreen');
   if (sp) { sp.classList.add('hide'); setTimeout(function(){ if(sp.parentNode) sp.parentNode.removeChild(sp); }, 700); }
 }, 2200);
 
-/* 常量 */
 var WORLD_HALF=200,TOTAL_ENEMIES=18,PLAYER_SPEED=10,CAM_DIST=5.0,CAM_HEIGHT=1.7;
 var MAX_PARTICLES=140,MAX_BULLETS=70;
 var PITCH_MIN=-0.7, PITCH_MAX=0.85;
@@ -406,7 +399,6 @@ var state='auth';
 var isOnlineMode=false;
 var paused=false;
 
-/* 登录/注册 */
 document.getElementById('toRegister').onclick = function() {
   document.getElementById('loginForm').style.display = 'none';
   document.getElementById('registerForm').style.display = 'flex';
@@ -495,8 +487,6 @@ function getLevel(kills) {
   if (kills < 400) return { lv: 6, title: '战场传说' };
   return { lv: 7, title: '肠肠之神' };
 }
-
-/* 大厅 */
 async function enterLobby() {
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('lobbyScreen').classList.remove('hidden');
@@ -577,7 +567,6 @@ function renderColorGrid() {
   });
 }
 
-/* QQ 绑定 */
 document.getElementById('qqBindBtn').onclick = function() {
   var qq = document.getElementById('qqInput').value.trim();
   if (!/^[1-9][0-9]{4,11}$/.test(qq)) return toast('请填正确的 QQ 号');
@@ -603,7 +592,6 @@ document.getElementById('qqChangeBtn').onclick = function() {
   });
 };
 
-/* 排行榜 & 好友 */
 function loadLeaderboard() {
   var el = document.getElementById('rankList');
   el.innerHTML = '加载中...';
@@ -648,7 +636,6 @@ document.getElementById('addFriendBtn').onclick = function(){
   });
 };
 
-/* 选项卡 / 模式 */
 document.querySelectorAll('.tab').forEach(function(t){
   t.onclick = function(){
     document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
@@ -669,7 +656,6 @@ document.querySelectorAll('.mode-card').forEach(function(b){
   };
 });
 
-/* 设置滑块 */
 (function(){
   var el1 = document.getElementById('volumeSlider');
   var el2 = document.getElementById('sensSlider');
@@ -679,7 +665,6 @@ document.querySelectorAll('.mode-card').forEach(function(b){
   if (el3) el3.addEventListener('input', function(e){ profile.aimAssist = parseFloat(e.target.value); document.getElementById('aimAssistValue').textContent = profile.aimAssist.toFixed(2); });
 })();
 
-/* 大厅小人 */
 var lobbyCanvas = document.getElementById('lobbyCanvas');
 var lobbyCtx = lobbyCanvas ? lobbyCanvas.getContext('2d') : null;
 function resizeLobbyCanvas() {
@@ -691,13 +676,17 @@ function resizeLobbyCanvas() {
   lobbyCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 function drawLobbySausage(t) {
-  if (!lobbyCtx) return;
-  var w = lobbyCanvas.width, h = lobbyCanvas.height;
-  var cx = w/2, cy = h/2, s = Math.min(w,h)/280;
-  lobbyCtx.clearRect(0,0,w,h);
-  var bob = Math.sin(t*0.0022)*5;
+  if (!lobbyCtx || !lobbyCanvas) return;
+  var rect = lobbyCanvas.getBoundingClientRect();
+  var w = rect.width || 200;
+  var h = rect.height || 200;
+  lobbyCtx.clearRect(0, 0, w, h);
+  var cx = w / 2;
+  var cy = h / 2;
+  var s = Math.min(w, h) / 280;
+  var bob = Math.sin(t * 0.0022) * 5;
   lobbyCtx.save();
-  lobbyCtx.translate(cx, cy+bob);
+  lobbyCtx.translate(cx, cy + bob);
   lobbyCtx.scale(s, s);
   lobbyCtx.beginPath(); lobbyCtx.ellipse(0, 110, 72, 16, 0, 0, TAU); lobbyCtx.fillStyle = 'rgba(0,0,0,0.35)'; lobbyCtx.fill();
   lobbyCtx.beginPath(); lobbyCtx.ellipse(0, 0, 75, 95, 0, 0, TAU); lobbyCtx.fillStyle = '#'+profile.skinColor.toString(16).padStart(6,'0'); lobbyCtx.fill();
@@ -714,7 +703,6 @@ function drawLobbySausage(t) {
 function lobbyLoop(t) { drawLobbySausage(t); requestAnimationFrame(lobbyLoop); }
 window.addEventListener('resize', resizeLobbyCanvas);
 
-/* 音频 */
 var audioCtx=null,masterGain=null;
 function initAudio(){
   if(audioCtx)return;
@@ -768,10 +756,7 @@ function sfxShoot(k){
 function sfxHurt(){if(!audioCtx)return;playTone(320,90,0.2,0.42,'triangle');playNoise(0.12,800,200,0.3);}
 function sfxKill(){if(audioCtx)[523,659,784].forEach(function(n,i){setTimeout(function(){playTone(n,n,0.12,0.35);},i*90);});}
 function sfxPickup(){if(!audioCtx)return;playTone(500,900,0.12,0.35);setTimeout(function(){playTone(900,1300,0.12,0.3);},80);}
-function sfxWin(){if(audioCtx)[523,659,784,1047].forEach(function(n,i){setTimeout(function(){playTone(n,n,0.25,0.4);},i*130);});}
-function sfxLose(){if(audioCtx){playTone(400,200,0.32,0.42,'triangle');setTimeout(function(){playTone(280,130,0.42,0.42,'triangle');},220);}}
 
-/* 3D 引擎 */
 var scene,camera,renderer,playerGroup,playerMuzzle;
 var player={hp:100,maxHp:100,weapon:null,cool:0,dead:false,bodyMat:null,meds:{bandage:2,medkit:1,energy:1},usingMed:null,useTimer:0};
 var enemies=[],bullets=[],particles=[],pickups=[],obstacles=[],houses=[],remotePlayers={};
@@ -1516,7 +1501,6 @@ function flashHurt(){
   hurtTimer=setTimeout(function(){el.style.opacity='0';},100);
 }
 
-/* 全屏 */
 (function(){
   var fsBtn = document.createElement('button');
   fsBtn.id = 'fsOverlayBtn';
@@ -1540,7 +1524,6 @@ function flashHurt(){
   setTimeout(updateFs, 1000);
 })();
 
-/* 横屏检测 */
 function checkOrientation(){
   var oo = document.getElementById('orientOverlay');
   if (!oo) return;
@@ -1550,7 +1533,6 @@ function checkOrientation(){
 }
 window.addEventListener('resize', checkOrientation);
 
-/* 暂停/继续 */
 function pauseGame(){
   if(state!=='playing'||paused)return;
   paused=true;
@@ -1562,7 +1544,6 @@ function resumeGame(){
   document.getElementById('pauseMenu').classList.add('hidden');
 }
 
-/* 暂停菜单滑块 */
 (function(){
   var pv = document.getElementById('pauseVolume');
   var ps = document.getElementById('pauseSens');
@@ -1572,7 +1553,6 @@ function resumeGame(){
   if (pa) pa.addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.aimAssist = v; document.getElementById('pauseAimVal').textContent = v.toFixed(2); var s = document.getElementById('aimAssistSlider'); if (s) { s.value = v; document.getElementById('aimAssistValue').textContent = v.toFixed(2); } });
 })();
 
-/* 虚拟摇杆 */
 var stickCanvas=document.createElement('canvas');
 stickCanvas.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:11';
 document.body.appendChild(stickCanvas);
@@ -1618,7 +1598,6 @@ function paintSticks(){
 }
 (function stickLoop(){paintSticks();requestAnimationFrame(stickLoop);})();
 
-/* 输入 */
 window.addEventListener('keydown',function(e){
   if(!e.key)return;
   var k=e.key.toLowerCase();
@@ -1685,7 +1664,6 @@ function bindInput(){
   });
 }
 
-/* 加载 & 开始 */
 function showLoadingThenStart(){
   var lo=document.getElementById('loadOverlay');
   if(!lo)return startGameActual();
@@ -1715,7 +1693,7 @@ function startGameActual(){
   document.getElementById('pauseMenu').classList.add('hidden');
   document.getElementById('loadOverlay').classList.add('hidden');
   document.getElementById('hud').classList.add('show');
-  lastAlive=-1; lastHp=-1; lastWeapon=''; lastZone=''; lastNet='';
+  lastAlive=-1; lastHp=-1; lastWeapon=''; lastZone='';
   checkOrientation();
 }
 async function endGame(win){
@@ -1735,7 +1713,6 @@ async function endGame(win){
   },800);
 }
 
-/* 按钮绑定 */
 document.getElementById('playBtn').onclick=function(){
   initAudio(); resumeAudio();
   isOnlineMode=(currentMode==='online');
@@ -1764,7 +1741,6 @@ document.getElementById('backToLobbyBtn').onclick=function(){
   renderLobby();
 };
 
-/* 主循环 */
 function loop(now){
   var dt=(now-lastTime)/1000;
   lastTime=now;
@@ -1775,8 +1751,6 @@ function loop(now){
   if(renderer&&scene&&camera)renderer.render(scene,camera);
   requestAnimationFrame(loop);
 }
-
-/* 启动 */
 function bootGame(){
   initThree();
   bindInput();

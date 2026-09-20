@@ -186,6 +186,7 @@ async function apiPlayer(url) {
     ok: true,
     email: user.email,
     nickname: user.nickname,
+    stats: { games: s.games || 0, kills: s.kills || 0, wins: s.wins || 0, bestRank: s.bestRank || 999 },
     games: s.games || 0,
     kills: s.kills || 0,
     wins: s.wins || 0,

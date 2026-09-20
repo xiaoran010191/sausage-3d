@@ -1879,6 +1879,95 @@ setTimeout(function(){
 }, 200);
 
 document.addEventListener('click', function(){ initAudio(); resumeAudio(); }, {once:true});
+<script>
+/* ===== 补丁 v1：全屏 + 横屏 + 设置滑块 + 游戏内设置 + 皮肤刷新 ===== */
+
+// 1. 全屏按钮
+(function(){
+  var fsBtn = document.createElement('button');
+  fsBtn.id = 'fsOverlayBtn';
+  fsBtn.innerHTML = '点击进入全屏<br><span style="font-size:14px;opacity:.7;letter-spacing:2px">（体验更好）</span>';
+  fsBtn.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.88);color:#FFD23F;font-size:26px;font-weight:900;letter-spacing:6px;border:none;font-family:inherit;cursor:pointer;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px';
+  document.body.appendChild(fsBtn);
+  function isFs(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function reqFs(){
+    var el = document.documentElement;
+    var fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) { try { fn.call(el); } catch(e){} }
+    if (screen.orientation && screen.orientation.lock) {
+      try { screen.orientation.lock('landscape').catch(function(){}); } catch(e){}
+    }
+  }
+  function updateFs(){ fsBtn.style.display = isFs() ? 'none' : 'flex'; }
+  fsBtn.addEventListener('click', function(){ reqFs(); setTimeout(updateFs, 300); });
+  fsBtn.addEventListener('touchstart', function(e){ e.preventDefault(); reqFs(); setTimeout(updateFs, 300); });
+  document.addEventListener('fullscreenchange', updateFs);
+  document.addEventListener('webkitfullscreenchange', updateFs);
+  setTimeout(updateFs, 1000);
+})();
+
+// 2. 横屏检测
+function checkOrientation(){
+  var oo = document.getElementById('orientOverlay');
+  if (!oo) return;
+  if (state !== 'playing' || !isOnMobile) { oo.classList.add('hidden'); return; }
+  if (innerHeight > innerWidth) oo.classList.remove('hidden');
+  else oo.classList.add('hidden');
+}
+window.addEventListener('resize', checkOrientation);
+window.addEventListener('orientationchange', function(){ setTimeout(checkOrientation, 300); });
+
+// 3. 设置滑块
+(function(){
+  var map = {
+    volumeSlider: function(v){ profile.volume = v; document.getElementById('volumeValue').textContent = v.toFixed(2); if (masterGain) masterGain.gain.value = v; },
+    sensSlider: function(v){ profile.sensitivity = v; document.getElementById('sensValue').textContent = v.toFixed(1); },
+    aimAssistSlider: function(v){ profile.aimAssist = v; document.getElementById('aimAssistValue').textContent = v.toFixed(2); }
+  };
+  Object.keys(map).forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function(e){ map[id](parseFloat(e.target.value)); });
+    el.addEventListener('change', function(e){ map[id](parseFloat(e.target.value)); });
+  });
+})();
+
+// 4. 大厅强制刷新皮肤/地图/武器
+setTimeout(function(){
+  if (typeof renderColorGrid === 'function') renderColorGrid();
+  if (typeof renderMapGrid === 'function') renderMapGrid();
+  if (typeof renderWeaponGrid === 'function') renderWeaponGrid();
+  if (typeof resizeLobbyCanvas === 'function') resizeLobbyCanvas();
+}, 500);
+
+// 5. 游戏内暂停菜单重建（加音量/灵敏度/辅助瞄准滑块）
+(function(){
+  var pc = document.querySelector('.pause-content');
+  if (!pc) return;
+  pc.innerHTML = '<h2>⏸ 已暂停</h2>' +
+    '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">音量</label><input type="range" id="pauseVolume" min="0" max="1" step="0.05" value="' + profile.volume + '" style="flex:1"><span id="pauseVolumeVal" style="flex:0 0 36px;text-align:right">' + profile.volume.toFixed(2) + '</span></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">灵敏度</label><input type="range" id="pauseSens" min="0.4" max="3" step="0.1" value="' + profile.sensitivity + '" style="flex:1"><span id="pauseSensVal" style="flex:0 0 36px;text-align:right">' + profile.sensitivity.toFixed(1) + '</span></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;font-size:12px"><label style="flex:0 0 60px">辅助瞄准</label><input type="range" id="pauseAim" min="0" max="0.5" step="0.05" value="' + profile.aimAssist + '" style="flex:1"><span id="pauseAimVal" style="flex:0 0 36px;text-align:right">' + profile.aimAssist.toFixed(2) + '</span></div>' +
+    '<div class="pause-btns"><button class="btn" id="resumeBtn2">▶ 继续</button><button class="btn ghost" id="exitGameBtn2">🏠 退出</button></div>';
+  document.getElementById('pauseVolume').addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.volume = v; document.getElementById('pauseVolumeVal').textContent = v.toFixed(2); if (masterGain) masterGain.gain.value = v; });
+  document.getElementById('pauseSens').addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.sensitivity = v; document.getElementById('pauseSensVal').textContent = v.toFixed(1); });
+  document.getElementById('pauseAim').addEventListener('input', function(e){ var v = parseFloat(e.target.value); profile.aimAssist = v; document.getElementById('pauseAimVal').textContent = v.toFixed(2); });
+  document.getElementById('resumeBtn2').onclick = resumeGame;
+  document.getElementById('exitGameBtn2').onclick = function(){
+    if (!confirm('退出到大厅？')) return;
+    paused = false;
+    document.getElementById('pauseMenu').classList.add('hidden');
+    state = 'menu';
+    document.getElementById('hud').classList.remove('show');
+    document.getElementById('lobbyScreen').classList.remove('hidden');
+    renderLobby();
+  };
+})();
+
+// 6. 排行榜调试（打开网页后按F12在控制台输入 testLeaderboard() 看返回）
+window.testLeaderboard = function(){
+  fetch('/api/leaderboard').then(r=>r.json()).then(d=>{ console.log('排行榜API返回:', d); alert('排行榜API返回: ' + JSON.stringify(d).slice(0, 300)); });
+};
 </script>
 </body>
-  </html>
+</html>

@@ -903,21 +903,39 @@ function stopGyro(){
   window.removeEventListener('deviceorientation',onGyro,true);
   gyroRuntimeOn=false;lastGyroBeta=null;lastGyroGamma=null;
 }
+var lastGyroTime = 0;
 function onGyro(e){
   if(!gyroRuntimeOn||state!=='playing'||paused)return;
   var beta=e.beta||0,gamma=e.gamma||0;
-  if(lastGyroBeta===null){lastGyroBeta=beta;lastGyroGamma=gamma;return;}
+  if(lastGyroBeta===null){lastGyroBeta=beta;lastGyroGamma=gamma;lastGyroTime=performance.now();return;}
+  var now=performance.now();
+  var dt=(now-lastGyroTime)/1000;
+  if(dt<=0||dt>0.2)dt=0.016;
+  lastGyroTime=now;
+
   var dGamma=gamma-lastGyroGamma,dBeta=beta-lastGyroBeta;
   if(dGamma>180)dGamma-=360;if(dGamma<-180)dGamma+=360;
   if(dBeta>180)dBeta-=360;if(dBeta<-180)dBeta+=360;
-  if(Math.abs(dGamma)<0.12)dGamma=0;
-  if(Math.abs(dBeta)<0.12)dBeta=0;
-  var sens=profile.gyroSensitivity;
-  camYaw-=dGamma*0.012*sens;
-  camPitch=clamp(camPitch+dBeta*0.010*sens,PITCH_MIN,PITCH_MAX);
   lastGyroBeta=beta;lastGyroGamma=gamma;
-}
 
+  // 死区：轻微抖动不响应
+  if(Math.abs(dGamma)<0.3)dGamma=0;
+  if(Math.abs(dBeta)<0.3)dBeta=0;
+  // 单帧限幅：防止陀螺仪跳变把视角顶到天
+  if(dGamma>4)dGamma=4;if(dGamma<-4)dGamma=-4;
+  if(dBeta>4)dBeta=4;if(dBeta<-4)dBeta=-4;
+
+  var sens=profile.gyroSensitivity;
+  // 按时间归一化，手感更稳
+  var yawDelta=(dGamma/dt)*0.0025*sens*dt;
+  var pitchDelta=(dBeta/dt)*0.0020*sens*dt;
+  // 每帧最多转 0.05 弧度，大约 3 度
+  if(yawDelta>0.05)yawDelta=0.05;if(yawDelta<-0.05)yawDelta=-0.05;
+  if(pitchDelta>0.05)pitchDelta=0.05;if(pitchDelta<-0.05)pitchDelta=-0.05;
+
+  camYaw-=yawDelta;
+  camPitch=clamp(camPitch+pitchDelta,PITCH_MIN,PITCH_MAX);
+}
 var audioCtx=null,masterGain=null,enemyShotCD=0,hurtCD=0,zoneCD=0;
 function initAudio(){
   if(audioCtx)return;

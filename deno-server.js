@@ -1,5 +1,5 @@
 /* =========================================================
-   肠肠大作战 · Render 版后端（Resend 发邮件 + Redis）
+   肠肠大作战 · Render 版后端（邮箱注册 + Resend 邮件 + QQ 绑定）
    ========================================================= */
 
 import { connect } from "https://deno.land/x/redis@v0.32.4/mod.ts";
@@ -75,6 +75,7 @@ function makeRoomCode() {
   return code;
 }
 const isValidQQ = (e) => /^[a-zA-Z0-9._-]+@qq\.com$/i.test(e);
+const isValidQQNum = (q) => /^[1-9][0-9]{4,11}$/.test(q);
 
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -104,8 +105,20 @@ async function authUser(req) {
   if (!r.value) return null;
   return await getUser(r.value.email);
 }
+async function getUserByQQ(qq) {
+  const r = await kv.get(["qq", qq]);
+  if (!r.value) return null;
+  return await getUser(r.value.email);
+}
 function publicUser(u) {
-  return { email: u.email, nickname: u.nickname, stats: u.stats, friends: u.friends || [], profile: u.profile };
+  return {
+    email: u.email,
+    nickname: u.nickname,
+    stats: u.stats,
+    friends: u.friends || [],
+    profile: u.profile,
+    boundQQ: u.boundQQ || ""
+  };
 }
 
 const rooms = new Map();
@@ -157,7 +170,7 @@ async function apiSendCode(req) {
   await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
   const r = await sendCodeEmail(email, code);
   if (!r.ok) return jsonResp({ ok: false, msg: r.msg });
-  return jsonResp({ ok: true, msg: "验证码已发送到你的邮箱" });
+  return jsonResp({ ok: true, msg: "验证码已发送到你的 QQ 邮箱，请查收" });
 }
 
 async function apiRegister(req) {
@@ -171,7 +184,7 @@ async function apiRegister(req) {
   if (!nickname) return jsonResp({ ok: false, msg: "请填写昵称" });
   if (await getUser(email)) return jsonResp({ ok: false, msg: "该邮箱已注册" });
   const codeRec = await kv.get(["code", email]);
-  if (!codeRec.value) return jsonResp({ ok: false, msg: "请先获取验证码" });
+  if (!codeRec.value) return jsonResp({ ok: false, msg: "请先点获取验证码" });
   if (codeRec.value.code !== code) return jsonResp({ ok: false, msg: "验证码错误" });
   if (Date.now() > codeRec.value.expires) return jsonResp({ ok: false, msg: "验证码已过期" });
   await kv.delete(["code", email]);
@@ -183,6 +196,7 @@ async function apiRegister(req) {
     createdAt: Date.now(),
     stats: { games: 0, kills: 0, wins: 0, bestRank: 999 },
     friends: [], banned: false,
+    boundQQ: "",
     profile: { skinColor: 0xff6b35, startWeapon: "pistol", startMap: "green", sensitivity: 1.2, aimAssist: 0.1, volume: 0.6, gyroEnabled: false }
   };
   await saveUser(user);
@@ -202,6 +216,37 @@ async function apiLogin(req) {
   const token = makeToken();
   await kv.set(["token", token], { email, createdAt: Date.now() });
   return jsonResp({ ok: true, token, user: publicUser(user) });
+}
+
+async function apiBindQQ(req) {
+  const user = await authUser(req);
+  if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
+  if (user.banned) return jsonResp({ ok: false, msg: "账号已被封禁" }, 403);
+  const body = await readJSON(req);
+  const qq = String(body.qq || "").trim();
+  if (!isValidQQNum(qq)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 号（5-12位数字）" });
+  const existing = await getUserByQQ(qq);
+  if (existing && existing.email !== user.email) {
+    return jsonResp({ ok: false, msg: "该 QQ 已被其他账号绑定" });
+  }
+  if (user.boundQQ && user.boundQQ !== qq) {
+    await kv.delete(["qq", user.boundQQ]);
+  }
+  user.boundQQ = qq;
+  await saveUser(user);
+  await kv.set(["qq", qq], { email: user.email });
+  return jsonResp({ ok: true, msg: "绑定成功", user: publicUser(user) });
+}
+
+async function apiUnbindQQ(req) {
+  const user = await authUser(req);
+  if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
+  if (user.boundQQ) {
+    await kv.delete(["qq", user.boundQQ]);
+    user.boundQQ = "";
+    await saveUser(user);
+  }
+  return jsonResp({ ok: true, msg: "已解绑", user: publicUser(user) });
 }
 
 async function apiProfile(req) {
@@ -232,7 +277,6 @@ async function apiResult(req) {
 async function apiPlayer(url) {
   const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
   if (!email) return jsonResp({ ok: false, msg: "缺少 email 参数" });
-  if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "邮箱格式不正确" });
   const user = await getUser(email);
   if (!user) return jsonResp({ ok: false, msg: "玩家不存在" });
   const s = user.stats || {};
@@ -244,12 +288,31 @@ async function apiPlayer(url) {
   });
 }
 
+async function apiPlayerByQQ(url) {
+  const qq = String(url.searchParams.get("qq") || "").trim();
+  if (!qq) return jsonResp({ ok: false, msg: "缺少 qq 参数" });
+  const user = await getUserByQQ(qq);
+  if (!user) return jsonResp({ ok: false, msg: "该 QQ 未绑定游戏账号" });
+  const s = user.stats || {};
+  return jsonResp({
+    ok: true, email: user.email, qq: qq, nickname: user.nickname,
+    games: s.games || 0, kills: s.kills || 0, wins: s.wins || 0, bestRank: s.bestRank || 999
+  });
+}
+
 async function apiLeaderboard() {
   const list = [];
   for await (const entry of kv.list({ prefix: ["user"] })) {
     const u = entry.value;
     if (u.banned) continue;
-    list.push({ email: u.email, nickname: u.nickname, kills: u.stats.kills || 0, wins: u.stats.wins || 0, games: u.stats.games || 0, bestRank: u.stats.bestRank || 999 });
+    list.push({
+      email: u.email,
+      nickname: u.nickname,
+      kills: (u.stats && u.stats.kills) || 0,
+      wins: (u.stats && u.stats.wins) || 0,
+      games: (u.stats && u.stats.games) || 0,
+      bestRank: (u.stats && u.stats.bestRank) || 999
+    });
   }
   list.sort((a, b) => b.kills - a.kills || b.wins - a.wins);
   return jsonResp({ ok: true, list: list.slice(0, 100) });
@@ -260,7 +323,7 @@ async function apiLeaderboardText() {
   for await (const entry of kv.list({ prefix: ["user"] })) {
     const u = entry.value;
     if (u.banned) continue;
-    list.push({ nickname: u.nickname, kills: u.stats.kills || 0, wins: u.stats.wins || 0 });
+    list.push({ nickname: u.nickname, kills: (u.stats && u.stats.kills) || 0, wins: (u.stats && u.stats.wins) || 0 });
   }
   list.sort((a, b) => b.kills - a.kills || b.wins - a.wins);
   const top = list.slice(0, 10);
@@ -278,7 +341,7 @@ async function apiFriends(req) {
   for (const email of (user.friends || [])) {
     const f = await getUser(email);
     if (!f) continue;
-    list.push({ email, nickname: f.nickname, kills: f.stats.kills || 0, online: false });
+    list.push({ email, nickname: f.nickname, kills: (f.stats && f.stats.kills) || 0, online: false });
   }
   return jsonResp({ ok: true, list });
 }
@@ -469,9 +532,12 @@ Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
   if (path === "/api/send-code" && req.method === "POST") return await apiSendCode(req);
   if (path === "/api/register" && req.method === "POST") return await apiRegister(req);
   if (path === "/api/login" && req.method === "POST") return await apiLogin(req);
+  if (path === "/api/bind-qq" && req.method === "POST") return await apiBindQQ(req);
+  if (path === "/api/unbind-qq" && req.method === "POST") return await apiUnbindQQ(req);
   if (path === "/api/profile" && req.method === "POST") return await apiProfile(req);
   if (path === "/api/result" && req.method === "POST") return await apiResult(req);
   if (path === "/api/player" && req.method === "GET") return await apiPlayer(url);
+  if (path === "/api/player-by-qq" && req.method === "GET") return await apiPlayerByQQ(url);
   if (path === "/api/leaderboard" && req.method === "GET") return await apiLeaderboard();
   if (path === "/api/leaderboard-text" && req.method === "GET") return await apiLeaderboardText();
   if (path === "/api/friends" && req.method === "GET") return await apiFriends(req);

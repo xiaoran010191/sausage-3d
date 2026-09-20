@@ -539,11 +539,22 @@ function getLevel(kills){
   return{lv:7,title:'肠肠之神'};
 }
 
-function enterLobby(){
+// ★ 已修改：进入大厅时自动拉取后端最新战绩
+async function enterLobby(){
   state='menu';
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('lobbyScreen').classList.remove('hidden');
   profile=Object.assign(profile,API.user.profile||{});
+
+  try {
+    const r = await API.get('/api/player?email=' + encodeURIComponent(API.user.email));
+    if (r.ok && r.stats) {
+      API.user.stats = r.stats;
+      API.user.nickname = r.nickname || API.user.nickname;
+      localStorage.setItem('sd3d_user', JSON.stringify(API.user));
+    }
+  } catch(e){}
+
   initAudio();resumeAudio();
   renderLobby();
   startLobbyAnimation();
@@ -2285,4 +2296,4 @@ if(window.THREE){
 }
 </script>
 </body>
-</html>
+  </html>

@@ -1,10 +1,11 @@
 /* =========================================================
-   肠肠大作战 · Render 版后端（Redis + 机器人 + 联机）
+   肠肠大作战 · Render 版后端（Resend 发邮件 + Redis）
    ========================================================= */
 
 import { connect } from "https://deno.land/x/redis@v0.32.4/mod.ts";
 
 const REDIS_URL = Deno.env.get("REDIS_URL");
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 let redis = null;
 
 async function initRedis() {
@@ -44,9 +45,7 @@ const kv = {
     const keys = await redis.keys(prefixStr + "*");
     for (const keyStr of keys) {
       const data = await redis.get(keyStr);
-      if (data) {
-        yield { key: JSON.parse(keyStr.replace("kv:", "")), value: JSON.parse(data) };
-      }
+      if (data) yield { key: JSON.parse(keyStr.replace("kv:", "")), value: JSON.parse(data) };
     }
   }
 };
@@ -118,25 +117,47 @@ function createRoom(hostEmail, hostName) {
   return code;
 }
 
+async function sendCodeEmail(email, code) {
+  if (!RESEND_API_KEY) return { ok: false, msg: "未配置邮件服务" };
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: "肠肠大作战 <onboarding@resend.dev>",
+        to: [email],
+        subject: "【肠肠大作战】注册验证码",
+        html: `
+          <div style="font-family:sans-serif;padding:24px;background:#0c1a12;color:#fff;border-radius:12px">
+            <h2 style="color:#FFD23F;margin:0 0 16px">🌭 肠肠大作战</h2>
+            <p style="font-size:14px;color:#ccc;margin:0 0 16px">你的注册验证码是：</p>
+            <div style="font-size:32px;font-weight:900;color:#FF6B35;letter-spacing:6px;padding:16px;background:#000;border-radius:8px;text-align:center">${code}</div>
+            <p style="font-size:13px;color:#888;margin:16px 0 0">10 分钟内有效。</p>
+          </div>
+        `
+      })
+    });
+    const data = await res.json();
+    if (res.ok) return { ok: true };
+    return { ok: false, msg: data.message || "邮件发送失败" };
+  } catch (e) {
+    return { ok: false, msg: "邮件发送异常" };
+  }
+}
+
 async function apiSendCode(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
   if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱" });
+  if (await getUser(email)) return jsonResp({ ok: false, msg: "该邮箱已注册，请直接登录" });
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
-  console.log("验证码:", email, code, "万能码 888888");
-  return jsonResp({ ok: true, msg: "验证码已生成，也可直接用万能码 888888" });
-}
-
-// ★ 机器人专用：给机器人调用，返回验证码
-async function apiRobotSendCode(url) {
-  const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
-  if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱" });
-  const user = await getUser(email);
-  if (user) return jsonResp({ ok: false, msg: "该邮箱已注册，请直接登录" });
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
-  return jsonResp({ ok: true, code: code });
+  const r = await sendCodeEmail(email, code);
+  if (!r.ok) return jsonResp({ ok: false, msg: r.msg });
+  return jsonResp({ ok: true, msg: "验证码已发送到你的邮箱" });
 }
 
 async function apiRegister(req) {
@@ -149,12 +170,12 @@ async function apiRegister(req) {
   if (password.length < 6) return jsonResp({ ok: false, msg: "密码至少 6 位" });
   if (!nickname) return jsonResp({ ok: false, msg: "请填写昵称" });
   if (await getUser(email)) return jsonResp({ ok: false, msg: "该邮箱已注册" });
-  if (code !== "888888") {
-    const codeRec = await kv.get(["code", email]);
-    if (!codeRec.value) return jsonResp({ ok: false, msg: "请先获取验证码" });
-    if (codeRec.value.code !== code) return jsonResp({ ok: false, msg: "验证码错误（也可填 888888）" });
-    if (Date.now() > codeRec.value.expires) return jsonResp({ ok: false, msg: "验证码已过期" });
-  }
+  const codeRec = await kv.get(["code", email]);
+  if (!codeRec.value) return jsonResp({ ok: false, msg: "请先获取验证码" });
+  if (codeRec.value.code !== code) return jsonResp({ ok: false, msg: "验证码错误" });
+  if (Date.now() > codeRec.value.expires) return jsonResp({ ok: false, msg: "验证码已过期" });
+  await kv.delete(["code", email]);
+
   const salt = makeSalt();
   const user = {
     email, nickname, salt,
@@ -165,7 +186,6 @@ async function apiRegister(req) {
     profile: { skinColor: 0xff6b35, startWeapon: "pistol", startMap: "green", sensitivity: 1.2, aimAssist: 0.1, volume: 0.6, gyroEnabled: false }
   };
   await saveUser(user);
-  await kv.delete(["code", email]);
   const token = makeToken();
   await kv.set(["token", token], { email, createdAt: Date.now() });
   return jsonResp({ ok: true, token, user: publicUser(user) });
@@ -447,7 +467,6 @@ Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
   }
   if (req.headers.get("upgrade") === "websocket") return handleWebSocket(req);
   if (path === "/api/send-code" && req.method === "POST") return await apiSendCode(req);
-  if (path === "/api/robot/send-code" && req.method === "GET") return await apiRobotSendCode(url);
   if (path === "/api/register" && req.method === "POST") return await apiRegister(req);
   if (path === "/api/login" && req.method === "POST") return await apiLogin(req);
   if (path === "/api/profile" && req.method === "POST") return await apiProfile(req);

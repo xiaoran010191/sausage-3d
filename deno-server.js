@@ -1,5 +1,5 @@
 /* =========================================================
-   肠肠大作战 · Render 版后端（Redis 数据库 + 机器人 + 联机）
+   肠肠大作战 · Render 版后端（Redis + 机器人 + 联机）
    ========================================================= */
 
 import { connect } from "https://deno.land/x/redis@v0.32.4/mod.ts";
@@ -126,6 +126,17 @@ async function apiSendCode(req) {
   await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
   console.log("验证码:", email, code, "万能码 888888");
   return jsonResp({ ok: true, msg: "验证码已生成，也可直接用万能码 888888" });
+}
+
+// ★ 机器人专用：给机器人调用，返回验证码
+async function apiRobotSendCode(url) {
+  const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
+  if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱" });
+  const user = await getUser(email);
+  if (user) return jsonResp({ ok: false, msg: "该邮箱已注册，请直接登录" });
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
+  return jsonResp({ ok: true, code: code });
 }
 
 async function apiRegister(req) {
@@ -436,6 +447,7 @@ Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
   }
   if (req.headers.get("upgrade") === "websocket") return handleWebSocket(req);
   if (path === "/api/send-code" && req.method === "POST") return await apiSendCode(req);
+  if (path === "/api/robot/send-code" && req.method === "GET") return await apiRobotSendCode(url);
   if (path === "/api/register" && req.method === "POST") return await apiRegister(req);
   if (path === "/api/login" && req.method === "POST") return await apiLogin(req);
   if (path === "/api/profile" && req.method === "POST") return await apiProfile(req);

@@ -196,6 +196,55 @@ input{font-family:inherit;outline:none}
   .panels{padding:6px 10px}
   .start-btn{padding:12px 56px;font-size:16px;letter-spacing:3px}
 }
+
+/* ============ 启动页 ============ */
+#splashScreen{
+  position:fixed;inset:0;z-index:999999;
+  background:linear-gradient(160deg,#0c1a12,#0a1418 50%,#120a1a);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:#fff;transition:opacity .6s;
+}
+#splashScreen.hide{opacity:0;pointer-events:none}
+#splashScreen .splash-logo{font-size:80px;margin-bottom:18px;animation:splashBounce 1.4s ease-in-out infinite}
+#splashScreen .splash-title{font-size:38px;font-weight:900;letter-spacing:8px;color:#FFD23F;text-shadow:0 6px 0 #E85D2C,0 0 40px rgba(255,107,53,.6)}
+#splashScreen .splash-sub{margin-top:14px;font-size:12px;color:rgba(255,255,255,.45);letter-spacing:6px}
+#splashScreen .splash-bar{width:180px;height:5px;background:rgba(255,255,255,.1);border-radius:10px;margin-top:36px;overflow:hidden}
+#splashScreen .splash-bar-fill{height:100%;width:0;background:linear-gradient(90deg,#FF6B35,#FFD23F);border-radius:10px;animation:splashLoad 2s ease-in-out forwards}
+@keyframes splashBounce{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-12px) rotate(6deg)}}
+@keyframes splashLoad{0%{width:0}100%{width:100%}}
+
+/* ============ 段位搬到左上角 ============ */
+.lobby-top .logo-wrap{gap:8px}
+.lobby-top .logo-wrap .lv-badge{font-size:11px;padding:3px 10px}
+.lobby-top .logo-wrap .lv-title{font-size:12px;color:#FFD23F;font-weight:800;letter-spacing:1px}
+.lobby-top .player-level{display:none}
+
+/* ============ 横屏手机整体缩小 ============ */
+@media (orientation: landscape) and (max-height: 520px) {
+  .lobby-top{padding:6px 12px;padding-top:calc(6px + env(safe-area-inset-top))}
+  .lobby-bottom{padding:6px 12px;padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+  .start-btn{padding:10px 48px;font-size:14px;letter-spacing:2px}
+  .tabs{margin-bottom:6px}
+  .tab{padding:5px 2px;font-size:9px}
+  .tab span{font-size:13px}
+  .panel-view{gap:7px}
+  .card{padding:8px 10px}
+  .card h3{font-size:10px;margin-bottom:6px}
+  .stat-item{padding:6px 2px}
+  .stat-item b{font-size:14px}
+  .stat-item span{font-size:8px}
+  .mode-card{padding:7px}
+  .m-name{font-size:11px}
+  .m-tag{font-size:8px}
+  .map-card{padding:5px 2px;font-size:8px}
+  .map-card .emoji{font-size:17px}
+  .weapon-card{padding:6px 8px}
+  .wc-name{font-size:10px}
+  .wc-tag{font-size:7px}
+  .color-dot{width:24px;height:24px}
+  .character-area{padding:6px}
+  .char-name{font-size:12px;margin-top:2px}
+}
 </style>
 </head>
 <body>
@@ -226,12 +275,15 @@ input{font-family:inherit;outline:none}
 
 <div id="lobbyScreen" class="hidden">
   <div class="lobby-top">
-    <div class="logo-wrap"><span class="logo-icon">🌭</span><div class="logo-text">肠肠<span>大作战</span></div></div>
+    <div class="logo-wrap">
+      <span class="logo-icon">🌭</span>
+      <div class="logo-text" style="display:none">肠肠<span>大作战</span></div>
+      <div class="player-level"><span class="lv-badge" id="lobbyLevel">Lv.1</span><span class="lv-title" id="previewLevel">新兵入伍</span></div>
+    </div>
     <div class="player-card">
       <div class="avatar">🌭</div>
       <div class="player-info">
         <div class="player-name" id="lobbyNick">玩家</div>
-        <div class="player-level"><span class="lv-badge" id="lobbyLevel">Lv.1</span><span class="lv-title" id="previewLevel">新兵入伍</span></div>
       </div>
       <button class="icon-btn" id="logoutBtn">⎋</button>
     </div>
@@ -2275,6 +2327,58 @@ function boot(){
   resizeStickCanvas();
   requestAnimationFrame(loop);
   tryAutoLogin();
+
+  // 启动页
+  var splash = document.createElement('div');
+  splash.id = 'splashScreen';
+  splash.innerHTML = '<div class="splash-logo">🌭</div>' +
+                     '<div class="splash-title">肠肠大作战</div>' +
+                     '<div class="splash-sub">SAUSAGE BATTLE 3D</div>' +
+                     '<div class="splash-bar"><div class="splash-bar-fill"></div></div>';
+  document.body.appendChild(splash);
+  setTimeout(function(){
+    splash.classList.add('hide');
+    setTimeout(function(){
+      if(splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 700);
+  }, 2200);
+
+  // 全屏按钮
+  var fsBtn = document.createElement('button');
+  fsBtn.id = 'fsOverlayBtn';
+  fsBtn.innerHTML = '点击进入全屏<br><span style="font-size:14px;opacity:.7;letter-spacing:2px">（体验更好）</span>';
+  fsBtn.style.cssText = [
+    'position:fixed','inset:0','z-index:99998',
+    'background:rgba(0,0,0,0.88)','color:#FFD23F',
+    'font-size:26px','font-weight:900','letter-spacing:6px',
+    'border:none','font-family:inherit','cursor:pointer',
+    'display:none;flex-direction:column',
+    'align-items:center','justify-content:center','gap:10px'
+  ].join(';');
+  document.body.appendChild(fsBtn);
+
+  function isFs(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+              document.mozFullScreenElement || document.msFullscreenElement);
+  }
+  function reqFs(){
+    var el=document.documentElement;
+    var fn=el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen;
+    if(fn){try{var p=fn.call(el);if(p&&p.catch)p.catch(function(){});}catch(e){}}
+    if(screen.orientation&&screen.orientation.lock){
+      try{screen.orientation.lock('landscape').catch(function(){});}catch(e){}
+    }
+  }
+  function updateFs(){
+    fsBtn.style.display = isFs() ? 'none' : 'flex';
+  }
+  fsBtn.addEventListener('click',function(){reqFs();setTimeout(updateFs,300);});
+  fsBtn.addEventListener('touchstart',function(e){e.preventDefault();reqFs();setTimeout(updateFs,300);});
+  document.addEventListener('fullscreenchange',updateFs);
+  document.addEventListener('webkitfullscreenchange',updateFs);
+  document.addEventListener('mozfullscreenchange',updateFs);
+  document.addEventListener('MSFullscreenChange',updateFs);
+  updateFs();
 }
 
 function showThreeError(){
@@ -2293,66 +2397,5 @@ if(window.THREE){
   },8000);
 }
 </script>
-
-<script>
-(function(){
-  var btn = document.createElement('button');
-  btn.id = 'fsOverlayBtn';
-  btn.innerHTML = '点击进入全屏<br><span style="font-size:14px;opacity:.7;letter-spacing:2px">（体验更好）</span>';
-  btn.style.cssText = [
-    'position:fixed','inset:0','z-index:99998',
-    'background:rgba(0,0,0,0.88)','color:#FFD23F',
-    'font-size:26px','font-weight:900','letter-spacing:6px',
-    'border:none','font-family:inherit','cursor:pointer',
-    'display:none;flex-direction:column',
-    'align-items:center','justify-content:center','gap:10px'
-  ].join(';');
-  document.body.appendChild(btn);
-
-  function isFullscreen(){
-    return !!(document.fullscreenElement ||
-              document.webkitFullscreenElement ||
-              document.mozFullScreenElement ||
-              document.msFullscreenElement);
-  }
-
-  function requestFs(){
-    var el = document.documentElement;
-    var fn = el.requestFullscreen || el.webkitRequestFullscreen ||
-             el.mozRequestFullScreen || el.msRequestFullscreen;
-    if(fn){
-      try{
-        var p = fn.call(el);
-        if(p && p.catch) p.catch(function(){});
-      }catch(e){}
-    }
-    if(screen.orientation && screen.orientation.lock){
-      try{ screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
-    }
-  }
-
-  function update(){
-    btn.style.display = isFullscreen() ? 'none' : 'flex';
-  }
-
-  btn.addEventListener('click', function(){
-    requestFs();
-    setTimeout(update, 300);
-  });
-  btn.addEventListener('touchstart', function(e){
-    e.preventDefault();
-    requestFs();
-    setTimeout(update, 300);
-  });
-
-  document.addEventListener('fullscreenchange', update);
-  document.addEventListener('webkitfullscreenchange', update);
-  document.addEventListener('mozfullscreenchange', update);
-  document.addEventListener('MSFullscreenChange', update);
-
-  update();
-})();
-</script>
-
 </body>
 </html>

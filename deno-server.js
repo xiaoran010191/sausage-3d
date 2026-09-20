@@ -1,5 +1,6 @@
 /* =========================================================
-   肠肠大作战 · Render 版后端（邮箱注册 + Resend 邮件 + QQ 绑定）
+   肠肠大作战 · Render 后端 v3.0
+   功能：邮箱注册(Resend) / 登录 / QQ绑定 / 排行榜 / 联机 / 管理
    ========================================================= */
 
 import { connect } from "https://deno.land/x/redis@v0.32.4/mod.ts";
@@ -74,7 +75,7 @@ function makeRoomCode() {
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
-const isValidQQ = (e) => /^[a-zA-Z0-9._-]+@qq\.com$/i.test(e);
+const isValidEmail = (e) => /^[a-zA-Z0-9._-]+@qq\.com$/i.test(e);
 const isValidQQNum = (q) => /^[1-9][0-9]{4,11}$/.test(q);
 
 function jsonResp(data, status = 200) {
@@ -130,6 +131,7 @@ function createRoom(hostEmail, hostName) {
   return code;
 }
 
+/* ==================== Resend 发邮件 ==================== */
 async function sendCodeEmail(email, code) {
   if (!RESEND_API_KEY) return { ok: false, msg: "未配置邮件服务" };
   try {
@@ -164,7 +166,7 @@ async function sendCodeEmail(email, code) {
 async function apiSendCode(req) {
   const body = await readJSON(req);
   const email = String(body.email || "").trim().toLowerCase();
-  if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱" });
+  if (!isValidEmail(email)) return jsonResp({ ok: false, msg: "请填写正确的 QQ 邮箱" });
   if (await getUser(email)) return jsonResp({ ok: false, msg: "该邮箱已注册，请直接登录" });
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await kv.set(["code", email], { code, sentAt: Date.now(), expires: Date.now() + 600000 });
@@ -179,7 +181,7 @@ async function apiRegister(req) {
   const password = String(body.password || "");
   const nickname = String(body.nickname || "").trim().slice(0, 12);
   const code = String(body.code || "").trim();
-  if (!isValidQQ(email)) return jsonResp({ ok: false, msg: "请使用 QQ 邮箱注册" });
+  if (!isValidEmail(email)) return jsonResp({ ok: false, msg: "请使用 QQ 邮箱注册" });
   if (password.length < 6) return jsonResp({ ok: false, msg: "密码至少 6 位" });
   if (!nickname) return jsonResp({ ok: false, msg: "请填写昵称" });
   if (await getUser(email)) return jsonResp({ ok: false, msg: "该邮箱已注册" });
@@ -195,9 +197,8 @@ async function apiRegister(req) {
     passHash: await hashPass(password, salt),
     createdAt: Date.now(),
     stats: { games: 0, kills: 0, wins: 0, bestRank: 999 },
-    friends: [], banned: false,
-    boundQQ: "",
-    profile: { skinColor: 0xff6b35, startWeapon: "pistol", startMap: "green", sensitivity: 1.2, aimAssist: 0.1, volume: 0.6, gyroEnabled: false }
+    friends: [], banned: false, boundQQ: "",
+    profile: { skinColor: 0xff6b35, startWeapon: "pistol", startMap: "green", sensitivity: 1.2, aimAssist: 0.1, volume: 0.6, gyroEnabled: false, gyroSensitivity: 2.0 }
   };
   await saveUser(user);
   const token = makeToken();
@@ -252,7 +253,6 @@ async function apiUnbindQQ(req) {
 async function apiProfile(req) {
   const user = await authUser(req);
   if (!user) return jsonResp({ ok: false, msg: "未登录" }, 401);
-  if (user.banned) return jsonResp({ ok: false, msg: "账号已被封禁" }, 403);
   const body = await readJSON(req);
   Object.assign(user.profile, body.profile || {});
   await saveUser(user);
@@ -284,7 +284,7 @@ async function apiPlayer(url) {
     ok: true, email: user.email, nickname: user.nickname,
     stats: { games: s.games || 0, kills: s.kills || 0, wins: s.wins || 0, bestRank: s.bestRank || 999 },
     games: s.games || 0, kills: s.kills || 0, wins: s.wins || 0, bestRank: s.bestRank || 999,
-    banned: !!user.banned, banReason: user.banReason || ""
+    banned: !!user.banned, banReason: user.banReason || "", boundQQ: user.boundQQ || ""
   });
 }
 
@@ -306,8 +306,7 @@ async function apiLeaderboard() {
     const u = entry.value;
     if (u.banned) continue;
     list.push({
-      email: u.email,
-      nickname: u.nickname,
+      email: u.email, nickname: u.nickname,
       kills: (u.stats && u.stats.kills) || 0,
       wins: (u.stats && u.stats.wins) || 0,
       games: (u.stats && u.stats.games) || 0,
@@ -359,8 +358,7 @@ async function apiFriendAdd(req) {
   user.friends.push(target);
   other.friends = other.friends || [];
   if (!other.friends.includes(user.email)) other.friends.push(user.email);
-  await saveUser(user);
-  await saveUser(other);
+  await saveUser(user); await saveUser(other);
   return jsonResp({ ok: true, msg: "已添加好友" });
 }
 
@@ -372,10 +370,7 @@ async function apiFriendRemove(req) {
   user.friends = (user.friends || []).filter(e => e !== target);
   await saveUser(user);
   const other = await getUser(target);
-  if (other) {
-    other.friends = (other.friends || []).filter(e => e !== user.email);
-    await saveUser(other);
-  }
+  if (other) { other.friends = (other.friends || []).filter(e => e !== user.email); await saveUser(other); }
   return jsonResp({ ok: true });
 }
 
@@ -394,7 +389,6 @@ async function apiAdminSet(url) {
   await saveUser(user);
   return jsonResp({ ok: true, msg: "修改成功", user: publicUser(user) });
 }
-
 async function apiAdminBan(url) {
   if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
   const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
@@ -405,7 +399,6 @@ async function apiAdminBan(url) {
   await saveUser(user);
   return jsonResp({ ok: true, msg: "已封禁" });
 }
-
 async function apiAdminUnban(url) {
   if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
   const email = String(url.searchParams.get("email") || "").trim().toLowerCase();
@@ -415,7 +408,6 @@ async function apiAdminUnban(url) {
   await saveUser(user);
   return jsonResp({ ok: true, msg: "已解封" });
 }
-
 async function apiAdminBanned(url) {
   if (!checkAdmin(url)) return jsonResp({ ok: false, msg: "密钥错误" });
   const list = [];
@@ -428,8 +420,7 @@ async function apiAdminBanned(url) {
 
 function handleWebSocket(req) {
   const { socket, response } = Deno.upgradeWebSocket(req);
-  let player = null;
-  let roomCode = null;
+  let player = null, roomCode = null;
   socket.onmessage = async (ev) => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch (_) { return; }

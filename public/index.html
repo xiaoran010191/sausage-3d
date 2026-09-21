@@ -154,6 +154,7 @@ input{font-family:inherit;outline:none}
 .btn{padding:12px 32px;border-radius:50px;font-size:14px;font-weight:900;color:#fff;background:linear-gradient(135deg,#FF6B35,#E85D2C)}
 .btn.ghost{background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2)}
 #toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:80;background:rgba(0,0,0,.9);color:#fff;padding:11px 22px;border-radius:30px;font-size:13px;font-weight:800;opacity:0;transition:opacity .3s;pointer-events:none;border:2px solid rgba(255,210,63,.4);max-width:80vw;text-align:center}
+#toast.show{opacity:1}
 #splashScreen{position:fixed;inset:0;z-index:999999;background:linear-gradient(160deg,#0c1a12,#0a1418 50%,#120a1a);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;transition:opacity .6s}
 #splashScreen.hide{opacity:0;pointer-events:none}
 #splashScreen .splash-logo{font-size:80px;margin-bottom:18px}
@@ -284,6 +285,8 @@ input{font-family:inherit;outline:none}
         <div class="card"><h3>🎯 操作</h3>
           <div class="setting-row"><label>灵敏度</label><input type="range" id="sensSlider" min="0.4" max="3" step="0.1" value="1.2"><span class="setting-val" id="sensValue">1.2</span></div>
           <div class="setting-row"><label>辅助瞄准</label><input type="range" id="aimAssistSlider" min="0" max="0.5" step="0.05" value="0.1"><span class="setting-val" id="aimAssistValue">0.10</span></div>
+          <div class="setting-row"><label>陀螺仪</label><input type="range" id="gyroToggle" min="0" max="1" step="1" value="0"><span class="setting-val" id="gyroToggleVal">关</span></div>
+          <div class="setting-row"><label>陀螺仪校准</label><button class="code-btn" id="gyroCalibBtn" style="padding:4px 12px;font-size:11px">校准</button></div>
         </div>
       </div>
     </div>
@@ -1011,36 +1014,25 @@ function resolveCollision(nx,nz,radius){
     var dx=nx-o.x,dz=nz-o.z,d=Math.hypot(dx,dz),minD=o.r+radius;
     if(d<minD&&d>0.001){nx=o.x+(dx/d)*minD;nz=o.z+(dz/d)*minD;}
   }
-  // 整体房子 AABB 粗阻挡（防穿模）
   for(var j=0;j<houses.length;j++){
     var h=houses[j];
-    var dx2=nx-h.x,dz2=nz-h.z,c2=Math.cos(-h.rot),s2=Math.sin(-h.rot);
-    var lx2=dx2*c2-dz2*s2,lz2=dx2*s2+dz2*c2;
-    if(Math.abs(lx2)<h.W/2+radius && Math.abs(lz2)<h.D/2+radius){
-      nx=playerGroup?playerGroup.position.x:nx;
-      nz=playerGroup?playerGroup.position.z:nz;
-      break;
-    }
-  }
-  for(var jj=0;jj<houses.length;jj++){
-    var hh=houses[jj];
-    var dx3=nx-hh.x,dz3=nz-hh.z,c=Math.cos(-hh.rot),s=Math.sin(-hh.rot);
-    var lx=dx3*c-dz3*s,lz=dx3*s+dz3*c,hit=false;
-    for(var k=0;k<hh.worldWalls.length;k++){
-      var w=hh.worldWalls[k];
+    var dx2=nx-h.x,dz2=nz-h.z,c=Math.cos(-h.rot),s=Math.sin(-h.rot);
+    var lx=dx2*c-dz2*s,lz=dx2*s+dz2*c,hit=false;
+    for(var k=0;k<h.worldWalls.length;k++){
+      var w=h.worldWalls[k];
       var closestX=clamp(lx,w.lx-w.sw/2,w.lx+w.sw/2);
       var closestZ=clamp(lz,w.lz-w.sh/2,w.lz+w.sh/2);
       var ddx=lx-closestX,ddz=lz-closestZ,dd=Math.hypot(ddx,ddz);
       if(dd<radius&&dd>0.001){lx=closestX+(ddx/dd)*radius;lz=closestZ+(ddz/dd)*radius;hit=true;}
     }
-    if(!hh.isOpen){
-      var doorW=hh.doorW,wx=0,wz=hh.D/2;
+    if(!h.isOpen){
+      var doorW=h.doorW,wx=0,wz=h.D/2;
       var cX=clamp(lx,-doorW/2,doorW/2);
       var cZ=clamp(lz,wz-0.2,wz+0.2);
       var ddx2=lx-cX,ddz2=lz-cZ,dd2=Math.hypot(ddx2,ddz2);
       if(dd2<radius&&dd2>0.001){lx=cX+(ddx2/dd2)*radius;lz=cZ+(ddz2/dd2)*radius;hit=true;}
     }
-    if(hit){var cc=Math.cos(hh.rot),ss=Math.sin(hh.rot);nx=hh.x+lx*cc-lz*ss;nz=hh.z+lx*ss+lz*cc;}
+    if(hit){var cc=Math.cos(h.rot),ss=Math.sin(h.rot);nx=h.x+lx*cc-lz*ss;nz=h.z+lx*ss+lz*cc;}
   }
   return {nx:nx,nz:nz};
 }
@@ -1068,23 +1060,23 @@ function toggleDoor(){
 function applyAimAssist(dir,startPos){
   var strength=profile.aimAssist;
   if(strength<=0)return dir;
-  var best=null,bestDot=0.92,bestDist=80*80;
-  var targets=[];
-  enemies.forEach(function(e){if(!e.dead)targets.push({pos:e.group.position});});
-  for(var i=0;i<targets.length;i++){
-    var t=targets[i];
-    var dx=t.pos.x-startPos.x,dy=(t.pos.y+0.2)-startPos.y,dz=t.pos.z-startPos.z;
-    var d2=dx*dx+dy*dy+dz*dz;
-    if(d2>bestDist)continue;
-    var len=Math.sqrt(d2)||1,ndx=dx/len,ndy=dy/len,ndz=dz/len;
+  var maxAngleDeg=3+strength*10;
+  var maxDist=25,best=null,bestAngle=Infinity;
+  enemies.forEach(function(e){
+    if(e.dead)return;
+    var dx=e.group.position.x-startPos.x,dy=(e.group.position.y+0.2)-startPos.y,dz=e.group.position.z-startPos.z;
+    var dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(dist<1||dist>maxDist)return;
+    var ndx=dx/dist,ndy=dy/dist,ndz=dz/dist;
     var dot=ndx*dir.x+ndy*dir.y+ndz*dir.z;
-    if(dot<bestDot)continue;
-    bestDot=dot;bestDist=d2;best={x:ndx,y:ndy,z:ndz};
-  }
-  if(best){
-    dir.x+=(best.x-dir.x)*strength;dir.y+=(best.y-dir.y)*strength;dir.z+=(best.z-dir.z)*strength;
-    dir.normalize();
-  }
+    var angle=Math.acos(Math.max(-1,Math.min(1,dot)))*180/Math.PI;
+    if(angle<=maxAngleDeg&&angle<bestAngle){bestAngle=angle;best={x:ndx,y:ndy,z:ndz};}
+  });
+  if(!best)return dir;
+  var curRad=bestAngle*Math.PI/180,maxRad=maxAngleDeg*Math.PI/180;
+  var t=Math.min(1,curRad/maxRad)*strength*0.5;
+  dir.x+=(best.x-dir.x)*t;dir.y+=(best.y-dir.y)*t;dir.z+=(best.z-dir.z)*t;
+  dir.normalize();
   return dir;
 }
 function firePlayerWeapon(){
@@ -1098,7 +1090,7 @@ function firePlayerWeapon(){
     var dir=camDir.clone();
     dir.x+=rand(-w.spread,w.spread);dir.y+=rand(-w.spread,w.spread);dir.z+=rand(-w.spread,w.spread);
     dir.normalize();
-    dir = applyAimAssist(dir,startPos);
+    dir=applyAimAssist(dir,startPos);
     spawnBullet(startPos.clone(),dir,w.speed,w.dmg,w.color,'player',null);
   }
   var mp=new THREE.Vector3();
@@ -1223,7 +1215,7 @@ function updatePlayer(dt){
   if(keys['shift'])speed*=1.55;
   if(len2>0.02){
     var nx2=playerGroup.position.x+ix*speed*dt,nz2=playerGroup.position.z+iz*speed*dt;
-    var r=resolveCollision(nx2,nz2,0.75);
+    var r=resolveCollision(nx2,nz2,0.55);
     nx2=clamp(r.nx,-WORLD_HALF+2,WORLD_HALF-2); nz2=clamp(r.nz,-WORLD_HALF+2,WORLD_HALF-2);
     playerGroup.position.x=nx2; playerGroup.position.z=nz2;
   }
@@ -1674,51 +1666,46 @@ function bindInput(){
   });
 
   // ===== 陀螺仪 =====
-  var gyroEnabled=false,gyroBase=null,gyroFilt={a:0,b:0,g:0};
-  var gyroBtn=document.getElementById('gyroBtn');
-  if(!gyroBtn){
-    gyroBtn=document.createElement('button');
-    gyroBtn.id='gyroBtn';
-    gyroBtn.textContent='🌀 校准';
-    gyroBtn.style.cssText='position:fixed;right:14px;top:14px;z-index:30;background:#2f80ed;color:#fff;border:none;border-radius:50%;width:56px;height:56px;font-size:12px;pointer-events:auto;display:none';
-    document.body.appendChild(gyroBtn);
+  var gyroEnabled=false;
+  var gyroBetaCenter=null,gyroGammaCenter=null;
+  var gyroBetaF=0,gyroGammaF=0;
+  var gyroSmooth=0.85,gyroYawGain=0.6,gyroPitchGain=0.6;
+  var gyroType='deviceorientation';
+  var gyroHandler=function(e){
+    if(!gyroEnabled)return;
+    var beta=e.beta||0,gamma=e.gamma||0;
+    if(gyroBetaCenter===null)gyroBetaCenter=beta;
+    if(gyroGammaCenter===null)gyroGammaCenter=gamma;
+    var dBeta=beta-gyroBetaCenter,dGamma=gamma-gyroGammaCenter;
+    gyroBetaF=gyroBetaF*gyroSmooth+dBeta*(1-gyroSmooth);
+    gyroGammaF=gyroGammaF*gyroSmooth+dGamma*(1-gyroSmooth);
+    camYaw-=gyroGammaF*Math.PI/180*gyroYawGain;
+    camPitch=clamp(camPitch-gyroBetaF*Math.PI/180*gyroPitchGain,PITCH_MIN,PITCH_MAX);
+  };
+  function startGyro(){
+    if('ondeviceorientationabsolute' in window)gyroType='deviceorientationabsolute';
+    window.addEventListener(gyroType,gyroHandler,true);
   }
-  function initGyro(){
-    if(gyroEnabled)return;
-    var needPerm=typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function';
-    function bind(){
-      if(window._gyroBound)return;window._gyroBound=true;
-      gyroBase=null;
-      var useAbs='ondeviceorientationabsolute' in window;
-      window.addEventListener(useAbs?'deviceorientationabsolute':'deviceorientation',function(e){
-        if(e.alpha==null||e.beta==null||e.gamma==null)return;
-        if(gyroBase===null)gyroBase=e.alpha;
-        var a=(e.alpha-gyroBase)*Math.PI/180;
-        var b=e.beta*Math.PI/180;
-        var g=e.gamma*Math.PI/180;
-        gyroFilt.a=gyroFilt.a*0.82+a*0.18;
-        gyroFilt.b=gyroFilt.b*0.82+b*0.18;
-        gyroFilt.g=gyroFilt.g*0.82+g*0.18;
-        camYaw-=gyroFilt.g*0.02;
-        camPitch=clamp(camPitch+gyroFilt.b*0.015,PITCH_MIN,PITCH_MAX);
-      },true);
-      gyroEnabled=true;
-      gyroBtn.style.display='block';
-      toast('陀螺仪已开启');
-    }
-    if(needPerm){
-      DeviceOrientationEvent.requestPermission().then(function(s){if(s==='granted')bind();else toast('陀螺仪权限被拒绝');}).catch(function(){toast('需用户手势后开启');});
-    }else{
-      bind();
-    }
+  function stopGyro(){
+    window.removeEventListener(gyroType,gyroHandler,true);
+    gyroBetaCenter=null;gyroGammaCenter=null;gyroBetaF=0;gyroGammaF=0;
   }
-  gyroBtn.onclick=function(){gyroBase=null;toast('陀螺仪已校准');};
-  // 在大厅设置里加陀螺仪开关
-  var gyroSetting=document.createElement('div');
-  gyroSetting.className='setting-row';
-  gyroSetting.innerHTML='<label>陀螺仪</label><button id="gyroToggle" style="flex:1;padding:6px;border-radius:8px;font-size:12px;font-weight:800;background:'+(gyroEnabled?'rgba(76,203,113,.3)':'rgba(255,255,255,.1)')+';color:'+(gyroEnabled?'#4ECB71':'#9db09a')+';border:1px solid '+(gyroEnabled?'rgba(76,203,113,.5)':'rgba(255,255,255,.2)')+'">'+(gyroEnabled?'已开启':'未开启')+'</button>';
-  document.getElementById('panel-settings').querySelector('.card:last-child').appendChild(gyroSetting);
-  document.getElementById('gyroToggle').onclick=function(){if(!gyroEnabled){initGyro();this.textContent='已开启';this.style.background='rgba(76,203,113,.3)';this.style.color='#4ECB71';this.style.borderColor='rgba(76,203,113,.5)';}else{gyroEnabled=false;window._gyroBound=false;gyroBtn.style.display='none';this.textContent='未开启';this.style.background='rgba(255,255,255,.1)';this.style.color='#9db09a';this.style.borderColor='rgba(255,255,255,.2)';toast('陀螺仪已关闭');}};
+  var gyroToggle=document.getElementById('gyroToggle');
+  var gyroToggleVal=document.getElementById('gyroToggleVal');
+  if(gyroToggle){
+    gyroToggle.addEventListener('input',function(e){
+      gyroEnabled=parseInt(e.target.value,10)===1;
+      gyroToggleVal.textContent=gyroEnabled?'开':'关';
+      if(gyroEnabled)startGyro(); else stopGyro();
+    });
+  }
+  var gyroCalibBtn=document.getElementById('gyroCalibBtn');
+  if(gyroCalibBtn){
+    gyroCalibBtn.addEventListener('click',function(){
+      gyroBetaCenter=null;gyroGammaCenter=null;gyroBetaF=0;gyroGammaF=0;
+      toast('陀螺仪已校准');
+    });
+  }
 }
 
 function showLoadingThenStart(){
@@ -1800,7 +1787,6 @@ document.getElementById('backToLobbyBtn').onclick=function(){
 
 function loop(now){
   var dt=(now-lastTime)/1000;
-  lastTime=
   lastTime=now;
   if(dt>0.05)dt=0.05;
   fpsCounter++;

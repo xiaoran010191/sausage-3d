@@ -154,7 +154,6 @@ input{font-family:inherit;outline:none}
 .btn{padding:12px 32px;border-radius:50px;font-size:14px;font-weight:900;color:#fff;background:linear-gradient(135deg,#FF6B35,#E85D2C)}
 .btn.ghost{background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2)}
 #toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:80;background:rgba(0,0,0,.9);color:#fff;padding:11px 22px;border-radius:30px;font-size:13px;font-weight:800;opacity:0;transition:opacity .3s;pointer-events:none;border:2px solid rgba(255,210,63,.4);max-width:80vw;text-align:center}
-#toast.show{opacity:1}
 #splashScreen{position:fixed;inset:0;z-index:999999;background:linear-gradient(160deg,#0c1a12,#0a1418 50%,#120a1a);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;transition:opacity .6s}
 #splashScreen.hide{opacity:0;pointer-events:none}
 #splashScreen .splash-logo{font-size:80px;margin-bottom:18px}
@@ -1012,25 +1011,36 @@ function resolveCollision(nx,nz,radius){
     var dx=nx-o.x,dz=nz-o.z,d=Math.hypot(dx,dz),minD=o.r+radius;
     if(d<minD&&d>0.001){nx=o.x+(dx/d)*minD;nz=o.z+(dz/d)*minD;}
   }
+  // 整体房子 AABB 粗阻挡（防穿模）
   for(var j=0;j<houses.length;j++){
     var h=houses[j];
-    var dx2=nx-h.x,dz2=nz-h.z,c=Math.cos(-h.rot),s=Math.sin(-h.rot);
-    var lx=dx2*c-dz2*s,lz=dx2*s+dz2*c,hit=false;
-    for(var k=0;k<h.worldWalls.length;k++){
-      var w=h.worldWalls[k];
+    var dx2=nx-h.x,dz2=nz-h.z,c2=Math.cos(-h.rot),s2=Math.sin(-h.rot);
+    var lx2=dx2*c2-dz2*s2,lz2=dx2*s2+dz2*c2;
+    if(Math.abs(lx2)<h.W/2+radius && Math.abs(lz2)<h.D/2+radius){
+      nx=playerGroup?playerGroup.position.x:nx;
+      nz=playerGroup?playerGroup.position.z:nz;
+      break;
+    }
+  }
+  for(var jj=0;jj<houses.length;jj++){
+    var hh=houses[jj];
+    var dx3=nx-hh.x,dz3=nz-hh.z,c=Math.cos(-hh.rot),s=Math.sin(-hh.rot);
+    var lx=dx3*c-dz3*s,lz=dx3*s+dz3*c,hit=false;
+    for(var k=0;k<hh.worldWalls.length;k++){
+      var w=hh.worldWalls[k];
       var closestX=clamp(lx,w.lx-w.sw/2,w.lx+w.sw/2);
       var closestZ=clamp(lz,w.lz-w.sh/2,w.lz+w.sh/2);
       var ddx=lx-closestX,ddz=lz-closestZ,dd=Math.hypot(ddx,ddz);
       if(dd<radius&&dd>0.001){lx=closestX+(ddx/dd)*radius;lz=closestZ+(ddz/dd)*radius;hit=true;}
     }
-    if(!h.isOpen){
-      var doorW=h.doorW,wx=0,wz=h.D/2;
+    if(!hh.isOpen){
+      var doorW=hh.doorW,wx=0,wz=hh.D/2;
       var cX=clamp(lx,-doorW/2,doorW/2);
       var cZ=clamp(lz,wz-0.2,wz+0.2);
       var ddx2=lx-cX,ddz2=lz-cZ,dd2=Math.hypot(ddx2,ddz2);
       if(dd2<radius&&dd2>0.001){lx=cX+(ddx2/dd2)*radius;lz=cZ+(ddz2/dd2)*radius;hit=true;}
     }
-    if(hit){var cc=Math.cos(h.rot),ss=Math.sin(h.rot);nx=h.x+lx*cc-lz*ss;nz=h.z+lx*ss+lz*cc;}
+    if(hit){var cc=Math.cos(hh.rot),ss=Math.sin(hh.rot);nx=hh.x+lx*cc-lz*ss;nz=hh.z+lx*ss+lz*cc;}
   }
   return {nx:nx,nz:nz};
 }
@@ -1088,7 +1098,7 @@ function firePlayerWeapon(){
     var dir=camDir.clone();
     dir.x+=rand(-w.spread,w.spread);dir.y+=rand(-w.spread,w.spread);dir.z+=rand(-w.spread,w.spread);
     dir.normalize();
-    applyAimAssist(dir,startPos);
+    dir = applyAimAssist(dir,startPos);
     spawnBullet(startPos.clone(),dir,w.speed,w.dmg,w.color,'player',null);
   }
   var mp=new THREE.Vector3();
@@ -1213,7 +1223,7 @@ function updatePlayer(dt){
   if(keys['shift'])speed*=1.55;
   if(len2>0.02){
     var nx2=playerGroup.position.x+ix*speed*dt,nz2=playerGroup.position.z+iz*speed*dt;
-    var r=resolveCollision(nx2,nz2,0.55);
+    var r=resolveCollision(nx2,nz2,0.75);
     nx2=clamp(r.nx,-WORLD_HALF+2,WORLD_HALF-2); nz2=clamp(r.nz,-WORLD_HALF+2,WORLD_HALF-2);
     playerGroup.position.x=nx2; playerGroup.position.z=nz2;
   }
@@ -1662,6 +1672,53 @@ function bindInput(){
     resizeLobbyCanvas();
     checkOrientation();
   });
+
+  // ===== 陀螺仪 =====
+  var gyroEnabled=false,gyroBase=null,gyroFilt={a:0,b:0,g:0};
+  var gyroBtn=document.getElementById('gyroBtn');
+  if(!gyroBtn){
+    gyroBtn=document.createElement('button');
+    gyroBtn.id='gyroBtn';
+    gyroBtn.textContent='🌀 校准';
+    gyroBtn.style.cssText='position:fixed;right:14px;top:14px;z-index:30;background:#2f80ed;color:#fff;border:none;border-radius:50%;width:56px;height:56px;font-size:12px;pointer-events:auto;display:none';
+    document.body.appendChild(gyroBtn);
+  }
+  function initGyro(){
+    if(gyroEnabled)return;
+    var needPerm=typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function';
+    function bind(){
+      if(window._gyroBound)return;window._gyroBound=true;
+      gyroBase=null;
+      var useAbs='ondeviceorientationabsolute' in window;
+      window.addEventListener(useAbs?'deviceorientationabsolute':'deviceorientation',function(e){
+        if(e.alpha==null||e.beta==null||e.gamma==null)return;
+        if(gyroBase===null)gyroBase=e.alpha;
+        var a=(e.alpha-gyroBase)*Math.PI/180;
+        var b=e.beta*Math.PI/180;
+        var g=e.gamma*Math.PI/180;
+        gyroFilt.a=gyroFilt.a*0.82+a*0.18;
+        gyroFilt.b=gyroFilt.b*0.82+b*0.18;
+        gyroFilt.g=gyroFilt.g*0.82+g*0.18;
+        camYaw-=gyroFilt.g*0.02;
+        camPitch=clamp(camPitch+gyroFilt.b*0.015,PITCH_MIN,PITCH_MAX);
+      },true);
+      gyroEnabled=true;
+      gyroBtn.style.display='block';
+      toast('陀螺仪已开启');
+    }
+    if(needPerm){
+      DeviceOrientationEvent.requestPermission().then(function(s){if(s==='granted')bind();else toast('陀螺仪权限被拒绝');}).catch(function(){toast('需用户手势后开启');});
+    }else{
+      bind();
+    }
+  }
+  gyroBtn.onclick=function(){gyroBase=null;toast('陀螺仪已校准');};
+  // 在大厅设置里加陀螺仪开关
+  var gyroSetting=document.createElement('div');
+  gyroSetting.className='setting-row';
+  gyroSetting.innerHTML='<label>陀螺仪</label><button id="gyroToggle" style="flex:1;padding:6px;border-radius:8px;font-size:12px;font-weight:800;background:'+(gyroEnabled?'rgba(76,203,113,.3)':'rgba(255,255,255,.1)')+';color:'+(gyroEnabled?'#4ECB71':'#9db09a')+';border:1px solid '+(gyroEnabled?'rgba(76,203,113,.5)':'rgba(255,255,255,.2)')+'">'+(gyroEnabled?'已开启':'未开启')+'</button>';
+  document.getElementById('panel-settings').querySelector('.card:last-child').appendChild(gyroSetting);
+  document.getElementById('gyroToggle').onclick=function(){if(!gyroEnabled){initGyro();this.textContent='已开启';this.style.background='rgba(76,203,113,.3)';this.style.color='#4ECB71';this.style.borderColor='rgba(76,203,113,.5)';}else{gyroEnabled=false;window._gyroBound=false;gyroBtn.style.display='none';this.textContent='未开启';this.style.background='rgba(255,255,255,.1)';this.style.color='#9db09a';this.style.borderColor='rgba(255,255,255,.2)';toast('陀螺仪已关闭');}};
 }
 
 function showLoadingThenStart(){
@@ -1743,6 +1800,7 @@ document.getElementById('backToLobbyBtn').onclick=function(){
 
 function loop(now){
   var dt=(now-lastTime)/1000;
+  lastTime=
   lastTime=now;
   if(dt>0.05)dt=0.05;
   fpsCounter++;
